@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Session Transfer</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--line:#e2e5ea;--text:#1d2129;--muted:#6b7280;--accent:#2563eb;--accent-text:#fff;--danger:#dc2626;--ok:#16a34a;--warn:#d97706;--row-hover:#f0f3f8;--row-sel:#e3ecff;--code:#eef1f5}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--line:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#4f8cff;--danger:#f87171;--ok:#4ade80;--warn:#fbbf24;--row-hover:#1e232d;--row-sel:#1f2d4d;--code:#11141a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font-size:16px;margin:0;font-weight:650}
+header .status{color:var(--muted);font-size:12.5px;flex:1}
+nav{display:flex;gap:2px;padding:8px 18px 0;background:var(--panel);border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;color:var(--muted);cursor:pointer;font:inherit;font-weight:550}
+nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+main{padding:16px 18px;max-width:1400px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.panel h3{margin:0 0 10px;font-size:14px}
+label{display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+select,input[type=text],input[type=number],input[type=url]{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font:inherit}
+input[type=text]{min-width:220px}
+button,.btn{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 12px;font:inherit;cursor:pointer}
+button:hover{background:var(--row-hover)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+button.danger{color:var(--danger);border-color:var(--danger)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.muted{color:var(--muted)}.small{font-size:12px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px}
+@media(max-width:1000px){.split{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px}
+th{color:var(--muted);font-weight:600;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel)}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--row-hover)}tbody tr.sel{background:var(--row-sel)}
+tr.missing td.t{color:var(--danger)}tr.archived td{color:var(--muted)}
+.tablewrap{max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Consolas,monospace;max-height:40vh;overflow:auto;margin:0}
+.badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11.5px;border:1px solid var(--line);color:var(--muted)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}.badge.warn{color:var(--warn);border-color:var(--warn)}.badge.bad{color:var(--danger);border-color:var(--danger)}
+.map{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.map .old{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.map .old.bad{color:var(--danger)}.map .old.ok{color:var(--ok)}
+#toast{position:fixed;bottom:18px;right:18px;background:var(--text);color:var(--bg);padding:10px 14px;border-radius:8px;display:none;max-width:420px;z-index:9}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;max-width:760px;width:92vw}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.kv b{color:var(--muted);font-weight:500}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--muted)}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.preview-text{font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;background:var(--code);border-radius:8px;padding:8px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Claude Session Transfer</h1>
+  <span class="status" id="status">loading…</span>
+  <span id="apprun" class="badge" style="display:none">Claude app is running</span>
+  <button onclick="refresh()">Rescan</button>
+</header>
+<nav>
+  <button data-page="sessions" class="active">Sessions</button>
+  <button data-page="load">Load bundle</button>
+  <button data-page="backups">Backups</button>
+  <button data-page="sync">Sync &amp; peers</button>
+  <button data-page="settings">Settings</button>
+</nav>
+<main>
+
+<!-- ======================= SESSIONS ======================= -->
+<section class="page active" id="page-sessions">
+  <div class="row">
+    <label>Account <select id="s-account" onchange="renderSessions()"></select></label>
+    <input type="text" id="s-search" placeholder="Search title, folder, id…" oninput="renderSessions()">
+    <label><input type="checkbox" id="s-archived" onchange="renderSessions()"> archived</label>
+    <span class="muted small" id="s-count"></span>
+    <span style="flex:1"></span>
+    <button onclick="selectAll()">Select all</button>
+    <button onclick="clearSel()">Clear</button>
+  </div>
+  <div class="split">
+    <div class="tablewrap">
+      <table id="s-table">
+        <thead><tr>
+          <th data-k="title">Title</th><th data-k="cwd">Working folder</th><th data-k="lastActivityMs">Last activity</th>
+          <th data-k="sizeKB">KB</th><th data-k="model">Model</th><th data-k="id">Id</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div>
+      <div class="panel" id="preview">
+        <h3>Preview</h3>
+        <div class="muted small">Click a session.</div>
+      </div>
+      <div class="panel">
+        <h3>Actions on <span id="sel-count">0</span> selected</h3>
+        <div class="row">
+          <label>Target <select id="t-account"></select></label>
+          <label><input type="radio" name="mode" value="copy" checked> copy</label>
+          <label><input type="radio" name="mode" value="move"> move</label>
+          <label><input type="checkbox" id="t-newid"> new id</label>
+        </div>
+        <div class="row">
+          <button onclick="doTransfer(true)">Dry run</button>
+          <button class="primary" onclick="doTransfer(false)">Transfer</button>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
+        <div class="row">
+          <label><input type="checkbox" id="c-memory" checked> memory</label>
+          <label><input type="checkbox" id="c-project"> project CLAUDE.md / .claude</label>
+          <label><input type="checkbox" id="c-settings"> settings</label>
+        </div>
+        <div class="row">
+          <button class="primary" onclick="doCapture()">Capture → bundle</button>
+          <span class="muted small">saved to the incoming folder, then downloadable or pushable</span>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
+        <div class="row">
+          <button onclick="exportSel('md')">Export .md</button>
+          <button onclick="exportSel('html')">Export .html</button>
+          <button onclick="exportSel('jsonl')">Raw .jsonl</button>
+          <button onclick="scanSel()">Scan for secrets</button>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="d-transcript"> also delete transcript</label>
+          <button class="danger" onclick="doDelete(true)">Dry run delete</button>
+          <button class="danger" onclick="doDelete(false)">Delete (to trash)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= LOAD ======================= -->
+<section class="page" id="page-load">
+  <div class="split">
+    <div>
+      <div class="panel">
+        <h3>Bundles in incoming folder <span class="muted small" id="incoming-path"></span></h3>
+        <div class="drop" id="drop">Drop a bundle .zip here, or <label class="btn" style="display:inline">browse <input type="file" accept=".zip" style="display:none" onchange="uploadFile(this.files[0])"></label></div>
+        <div class="tablewrap" style="margin-top:10px;max-height:30vh">
+          <table id="b-table"><thead><tr><th>Name</th><th>From</th><th>Created</th><th>Sessions</th><th>KB</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="panel" id="b-detail" style="display:none">
+        <h3>Sessions in <span id="b-name"></span></h3>
+        <div class="tablewrap" style="max-height:30vh">
+          <table id="bs-table"><thead><tr><th>Title</th><th>Working folder</th><th>KB</th><th>Id</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="row" style="margin-top:8px"><button onclick="bSelectAll()">Select all</button><button onclick="bClear()">Clear</button></div>
+        <h3 style="margin-top:12px">Working folder mapping <span class="muted small">red = folder does not exist on this PC</span></h3>
+        <div class="map" id="b-map"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>Load into this PC</h3>
+        <div class="row"><label>Account <input type="text" id="l-account" list="acc-list" style="min-width:300px"></label></div>
+        <datalist id="acc-list"></datalist>
+        <div class="row"><label>Device id <input type="text" id="l-device" style="min-width:300px"></label></div>
+        <div class="row">
+          <label><input type="checkbox" id="l-merge" checked> merge existing transcripts</label>
+          <label><input type="checkbox" id="l-overwrite"> overwrite</label>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="l-newid"> new session ids</label>
+          <label><input type="checkbox" id="l-memory" checked> memory</label>
+          <label><input type="checkbox" id="l-project"> project files</label>
+          <label><input type="checkbox" id="l-settings"> settings</label>
+        </div>
+        <div class="row">
+          <button onclick="doLoad(true)">Dry run</button>
+          <button class="primary" onclick="doLoad(false)">Load selected</button>
+        </div>
+        <p class="muted small">Merge unions a transcript that already exists here with the incoming one, keyed by message id. That makes carrying a session back and forth between PCs safe. Overwrite replaces files outright.</p>
+      </div>
+      <div class="panel">
+        <h3>Send this bundle to another PC</h3>
+        <div class="row"><input type="url" id="p-url" placeholder="http://192.168.29.22:8765" style="min-width:260px"><input type="text" id="p-token" placeholder="peer token from the other PC"></div>
+        <div class="row"><button onclick="peerCheck()">Check</button><button class="primary" onclick="doPush()">Push selected bundle</button><button onclick="downloadBundle()">Download .zip</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= BACKUPS ======================= -->
+<section class="page" id="page-backups">
+  <div class="panel">
+    <h3>Backups <span class="muted small">written automatically before every change</span></h3>
+    <div class="tablewrap" style="max-height:60vh">
+      <table id="bk-table"><thead><tr><th>Account</th><th>Device</th><th>Created</th><th>Records</th><th>Name</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= SYNC ======================= -->
+<section class="page" id="page-sync">
+  <div class="split">
+    <div class="panel">
+      <h3>Scheduled sync</h3>
+      <p class="muted small">While the server runs, every interval it captures the sessions whose transcript changed since the last run into a dated bundle in the folder below. Point the folder at a shared drive, Dropzone, or a synced folder and the other PC can load from it.</p>
+      <div class="row"><label><input type="checkbox" id="y-enabled"> enabled</label></div>
+      <div class="row"><label>Account <select id="y-account"></select></label></div>
+      <div class="row"><label>Folder <input type="text" id="y-dir" style="min-width:360px" placeholder="D:\claude-sync or \\server\share\claude"></label></div>
+      <div class="row"><label>Every <input type="number" id="y-interval" min="1" value="60" style="width:80px"> minutes</label></div>
+      <div class="row"><button onclick="saveSync(false)">Save</button><button class="primary" onclick="saveSync(true)">Save and run now</button></div>
+      <pre id="y-log" class="small">no sync run yet</pre>
+    </div>
+    <div class="panel">
+      <h3>Receiving from other PCs</h3>
+      <p class="muted small">Start this tool with <code>python cst.py serve --host 0.0.0.0</code> on the receiving PC. The other PC pushes a bundle from its Load page using this PC's address and the peer token below. Pushed bundles land in the incoming folder.</p>
+      <div class="kv"><b>Peer token</b><code id="peer-token"></code><b>Incoming</b><code id="peer-incoming"></code></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= SETTINGS ======================= -->
+<section class="page" id="page-settings">
+  <div class="panel">
+    <h3>Account labels</h3>
+    <p class="muted small">Give each account id a name so dropdowns stop showing raw ids. Stored by this tool only.</p>
+    <div id="labels"></div>
+    <div class="row" style="margin-top:8px"><button class="primary" onclick="saveLabels()">Save labels</button></div>
+  </div>
+  <div class="panel">
+    <h3>Paths</h3>
+    <div class="kv" id="paths"></div>
+  </div>
+  <div class="panel">
+    <h3>Command line</h3>
+    <pre class="small">python cst.py serve [--host 0.0.0.0] [--port 8765]   web UI (this)
+python cst.py gui                                     tkinter window
+python cst.py list [--account ID] [--all]
+python cst.py capture --account ID --ids ID… --out bundle.zip [--memory] [--project] [--settings]
+python cst.py load bundle.zip --account ID [--device ID] [--map OLD=NEW]… [--merge|--overwrite] [--dry-run]
+python cst.py sync --account ID --dir FOLDER
+python cst.py push bundle.zip --url http://PC:8765 --token TOKEN
+python cst.py export --account ID --id ID --fmt md|html > file</pre>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+<dialog id="dlg"><h3 id="dlg-title" style="margin-top:0"></h3><pre id="dlg-body"></pre><div class="row" style="margin-top:10px;justify-content:flex-end"><button onclick="dlg.close()">Close</button></div></dialog>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+let INIT = false, STATE = null, SEL = new Set(), SORT = {k:'lastActivityMs', d:-1}, BUNDLE = null, BSEL = new Set(), MAP = {};
+
+// ---------- utils ----------
+async function api(path, body, raw){
+  const r = body === undefined ? await fetch(path) : await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (raw) return r;
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ms); }
+function showLog(title, lines){ $('#dlg-title').textContent=title; $('#dlg-body').textContent=(lines||[]).join('\n'); $('#dlg').showModal(); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function confirmBig(msg){ return confirm(msg + (STATE?.appRunning ? '\n\nThe Claude app is running. Close it first for a reliable result. Continue anyway?' : '')); }
+function acc(id){ return STATE.accounts.find(a=>a.id===id); }
+function accLabel(a){ return `${a.label}  (${a.sessions.length})${a.id===STATE.current?'  [signed in]':''}`; }
+
+// ---------- nav ----------
+$$('nav button').forEach(b=>b.onclick=()=>{ $$('nav button').forEach(x=>x.classList.toggle('active',x===b)); $$('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+b.dataset.page)); if(b.dataset.page==='backups') loadBackups(); if(b.dataset.page==='load') loadBundles(); });
+
+// ---------- state ----------
+async function refresh(){
+  try{ STATE = await api('/api/state'); }catch(e){ $('#status').textContent='server error: '+e.message; return; }
+  const n = STATE.accounts.reduce((a,b)=>a+b.sessions.length,0);
+  $('#status').textContent = `${STATE.accounts.length} account(s), ${n} sessions · v${STATE.version}`;
+  $('#apprun').style.display = STATE.appRunning ? '' : 'none';
+  const opts = STATE.accounts.map(a=>`<option value="${a.id}">${esc(accLabel(a))}</option>`).join('');
+  for (const id of ['#s-account','#t-account','#y-account']){ const el=$(id); const v=el.value; el.innerHTML=opts; if([...el.options].some(o=>o.value===v)) el.value=v; }
+  if (!INIT){ INIT=true;
+    $('#s-account').value = STATE.current || STATE.accounts[0]?.id;
+    $('#y-account').value = STATE.sync?.account || $('#s-account').value;
+    const other = STATE.accounts.find(a=>a.id!==$('#s-account').value); if(other) $('#t-account').value=other.id;
+  }
+  $('#acc-list').innerHTML = STATE.accounts.map(a=>`<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  if(!$('#l-account').value) $('#l-account').value = STATE.current || '';
+  if(!$('#l-device').value) $('#l-device').value = STATE.deviceHint || '';
+  $('#incoming-path').textContent = STATE.incomingDir;
+  $('#peer-token').textContent = STATE.peerToken; $('#peer-incoming').textContent = STATE.incomingDir;
+  const y = STATE.sync||{}; $('#y-enabled').checked=!!y.enabled; $('#y-dir').value=y.dir||''; $('#y-interval').value=y.interval_min||60; if(y.account) $('#y-account').value=y.account;
+  $('#y-log').textContent = (STATE.syncLog||[]).join('\n') || 'no sync run yet';
+  $('#labels').innerHTML = STATE.accounts.map(a=>`<div class="row"><code>${a.id}</code><input type="text" data-acc="${a.id}" value="${esc(STATE.labels[a.id]||'')}" placeholder="e.g. work"></div>`).join('');
+  $('#paths').innerHTML = `<b>Session store</b><code>${esc(STATE.store)}</code><b>Transcripts</b><code>${esc(STATE.projects)}</code><b>Incoming bundles</b><code>${esc(STATE.incomingDir)}</code><b>Platform</b><code>${esc(STATE.platform)}</code>`;
+  renderSessions();
+}
+
+// ---------- sessions ----------
+function visibleSessions(){
+  const a = acc($('#s-account').value); if(!a) return [];
+  const q = $('#s-search').value.trim().toLowerCase(), arch = $('#s-archived').checked;
+  let rows = a.sessions.filter(s => (arch || !s.archived) && (!q || [s.title,s.cwd,s.id,s.cliId,s.model].join(' ').toLowerCase().includes(q)));
+  rows.sort((x,y)=>{ const k=SORT.k; const a=x[k]??'', b=y[k]??''; return (a<b?-1:a>b?1:0)*SORT.d; });
+  return rows;
+}
+function renderSessions(){
+  const rows = visibleSessions(); const tb = $('#s-table tbody');
+  tb.innerHTML = rows.map(s=>`<tr data-id="${s.id}" class="${SEL.has(s.id)?'sel':''} ${s.hasTranscript?'':'missing'} ${s.archived?'archived':''}">
+    <td class="t" title="${esc(s.title)}">${esc(s.title)}</td><td title="${esc(s.cwd)}">${esc(s.cwd)}</td><td>${s.lastActivity}</td>
+    <td>${s.hasTranscript?s.sizeKB:'—'}</td><td>${esc((s.model||'').replace('claude-','').replace(/-\d{8}$/,''))}</td><td class="muted">${s.id.slice(6,14)}</td></tr>`).join('');
+  $('#s-count').textContent = `${rows.length} shown, ${SEL.size} selected`; $('#sel-count').textContent = SEL.size;
+  tb.querySelectorAll('tr').forEach(tr=>tr.onclick=e=>{ const id=tr.dataset.id; if(e.ctrlKey||e.metaKey){ SEL.has(id)?SEL.delete(id):SEL.add(id);} else if(e.shiftKey && LAST){ const ids=rows.map(r=>r.id); const [i,j]=[ids.indexOf(LAST),ids.indexOf(id)].sort((a,b)=>a-b); ids.slice(i,j+1).forEach(x=>SEL.add(x)); } else { SEL.has(id)&&SEL.size===1?SEL.clear():(SEL.clear(),SEL.add(id)); } LAST=id; renderSessions(); if(SEL.size===1) showPreview([...SEL][0]); });
+}
+let LAST=null;
+$$('#s-table th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT = SORT.k===k ? {k, d:-SORT.d} : {k, d: k==='lastActivityMs'||k==='sizeKB'?-1:1}; renderSessions(); });
+function selectAll(){ visibleSessions().forEach(s=>SEL.add(s.id)); renderSessions(); }
+function clearSel(){ SEL.clear(); renderSessions(); }
+async function showPreview(id){
+  const a=$('#s-account').value, s=acc(a).sessions.find(x=>x.id===id);
+  $('#preview').innerHTML = `<h3>Preview</h3><div class="kv"><b>Title</b><span>${esc(s.title)}</span><b>Folder</b><span>${esc(s.cwd)}</span><b>Id</b><code>${s.id}</code><b>Transcript</b><code>${s.cliId||'(none)'}</code></div><div class="muted small" style="margin-top:6px">loading…</div>`;
+  try{ const p = await api(`/api/preview?account=${a}&id=${encodeURIComponent(id)}`);
+    $('#preview').innerHTML += `<div class="small muted" style="margin:8px 0 4px">${p.userTurns} user / ${p.assistantTurns} assistant turns</div><div class="small"><b>First message</b></div><div class="preview-text">${esc(p.first||'(empty)')}</div><div class="small" style="margin-top:6px"><b>Last reply</b></div><div class="preview-text">${esc(p.last||'(empty)')}</div>`;
+    $('#preview').querySelector('.muted.small').remove();
+  }catch(e){ toast('preview: '+e.message); }
+}
+function needSel(){ if(!SEL.size){ toast('Select one or more sessions first.'); return false;} return true; }
+async function doTransfer(dry){
+  if(!needSel()) return; const source=$('#s-account').value, target=$('#t-account').value;
+  if(source===target) return toast('Source and target are the same account.');
+  const move = $('input[name=mode]:checked').value==='move';
+  if(!dry && !confirmBig(`${move?'Move':'Copy'} ${SEL.size} session(s) to ${acc(target).label}?`)) return;
+  try{ const r = await api('/api/transfer',{source,target,ids:[...SEL],move,newId:$('#t-newid').checked,dryRun:dry}); showLog(dry?'Dry run':'Transfer complete', r.log.concat(r.backup?['',`Backup: ${r.backup}`,'Restart Claude and sign in to the target account.']:[])); if(!dry){SEL.clear(); refresh();} }catch(e){ toast(e.message); }
+}
+async function doCapture(){
+  if(!needSel()) return;
+  try{ const r = await api('/api/capture',{account:$('#s-account').value,ids:[...SEL],memory:$('#c-memory').checked,project:$('#c-project').checked,settings:$('#c-settings').checked}); showLog('Bundle captured', r.log.concat(['','Find it on the Load page to download or push it.'])); }catch(e){ toast(e.message); }
+}
+function exportSel(fmt){ if(!needSel()) return; const a=$('#s-account').value; [...SEL].forEach(id=>{ const s=acc(a).sessions.find(x=>x.id===id); if(s.hasTranscript) window.open(`/api/export?account=${a}&id=${encodeURIComponent(id)}&fmt=${fmt}`); }); }
+async function scanSel(){
+  if(!needSel()) return; const a=$('#s-account').value; const out=[];
+  for(const id of SEL){ const s=acc(a).sessions.find(x=>x.id===id); const r=await api(`/api/scan?account=${a}&id=${encodeURIComponent(id)}`); out.push(`${s.title}: ${r.hits.length} possible secret(s)`); r.hits.forEach(h=>out.push(`   line ${h.line}  ${h.kind}  ${h.sample}`)); }
+  showLog('Secret scan', out.length?out:['nothing found']);
+}
+async function doDelete(dry){
+  if(!needSel()) return; const t=$('#d-transcript').checked;
+  if(!dry && !confirmBig(`Delete ${SEL.size} session record(s)${t?' AND their transcripts':''}? They go to the tool's trash folder.`)) return;
+  try{ const r=await api('/api/delete',{account:$('#s-account').value,ids:[...SEL],transcript:t,dryRun:dry}); showLog(dry?'Dry run delete':'Deleted', r.log); if(!dry){SEL.clear(); refresh();} }catch(e){ toast(e.message); }
+}
+
+// ---------- load / bundles ----------
+async function loadBundles(){
+  const r = await api('/api/bundles'); const tb=$('#b-table tbody');
+  tb.innerHTML = r.bundles.map(b=>`<tr data-path="${esc(b.path)}" class="${BUNDLE&&BUNDLE.path===b.path?'sel':''}"><td>${esc(b.name)}</td><td>${esc(b.from)}</td><td>${esc(b.created)}</td><td>${b.sessions}${b.memory?` +mem`:''}${b.project?` +proj`:''}</td><td>${b.sizeKB}</td><td><button class="small" onclick="event.stopPropagation();delBundle('${esc(b.path).replace(/\\/g,'\\\\')}')">✕</button></td></tr>`).join('') || '<tr><td colspan=6 class="muted">no bundles yet: capture one on the Sessions page, drop a zip above, or receive a push</td></tr>';
+  tb.querySelectorAll('tr[data-path]').forEach(tr=>tr.onclick=()=>openBundle(tr.dataset.path));
+}
+async function openBundle(path){
+  const m = await api(`/api/bundle?path=${encodeURIComponent(path)}`); BUNDLE={path, m}; BSEL=new Set(m.sessions.map(s=>s.cliSessionId)); MAP={};
+  $('#b-detail').style.display=''; $('#b-name').textContent=path.split(/[\\/]/).pop();
+  renderBundle(); loadBundles();
+}
+function renderBundle(){
+  const m=BUNDLE.m; $('#bs-table tbody').innerHTML = m.sessions.map(s=>`<tr data-id="${s.cliSessionId}" class="${BSEL.has(s.cliSessionId)?'sel':''}"><td>${esc(s.title)}</td><td>${esc(s.cwd)}</td><td>${s.transcriptKB}</td><td class="muted">${s.cliSessionId.slice(0,8)}</td></tr>`).join('');
+  $$('#bs-table tbody tr').forEach(tr=>tr.onclick=()=>{ const id=tr.dataset.id; BSEL.has(id)?BSEL.delete(id):BSEL.add(id); renderBundle(); });
+  $('#b-map').innerHTML = Object.entries(m.cwdStatus).map(([c,ok])=>`<span class="old ${ok?'ok':'bad'}">${esc(c)}</span><span>→</span><input type="text" value="${esc(MAP[c]||c)}" oninput="MAP[${JSON.stringify(c).replace(/"/g,'&quot;')}]=this.value">`).join('');
+}
+function bSelectAll(){ BUNDLE.m.sessions.forEach(s=>BSEL.add(s.cliSessionId)); renderBundle(); }
+function bClear(){ BSEL.clear(); renderBundle(); }
+async function doLoad(dry){
+  if(!BUNDLE) return toast('Open a bundle first.'); if(!BSEL.size) return toast('Select sessions in the bundle.');
+  const account=$('#l-account').value.trim(), device=$('#l-device').value.trim(); if(!account||!device) return toast('Account id and device id are required.');
+  const cwdMap={}; for(const [k,v] of Object.entries(MAP)) if(v.trim()&&v.trim()!==k) cwdMap[k]=v.trim();
+  if(!dry && !confirmBig(`Load ${BSEL.size} session(s) into account ${account}?`)) return;
+  try{ const r=await api('/api/load',{path:BUNDLE.path,ids:[...BSEL],account,device,cwdMap,newId:$('#l-newid').checked,overwrite:$('#l-overwrite').checked,merge:$('#l-merge').checked,memory:$('#l-memory').checked,project:$('#l-project').checked,settings:$('#l-settings').checked,dryRun:dry}); showLog(dry?'Dry run load':'Load complete', r.log.concat(r.backup?['',`Backup: ${r.backup}`,'Restart Claude and sign in to the target account.']:[])); if(!dry) refresh(); }catch(e){ toast(e.message); }
+}
+async function uploadFile(f){ if(!f) return; const r=await fetch('/api/upload',{method:'POST',headers:{'X-Bundle-Name':f.name},body:f}); const j=await r.json(); if(j.error) return toast(j.error); toast('Bundle saved'); await loadBundles(); openBundle(j.path); }
+const drop=$('#drop'); drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')}; drop.ondragleave=()=>drop.classList.remove('over'); drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');uploadFile(e.dataTransfer.files[0]);};
+async function delBundle(p){ if(!confirm('Delete this bundle file?')) return; await api('/api/delete-bundle',{path:p}); if(BUNDLE&&BUNDLE.path===p){BUNDLE=null;$('#b-detail').style.display='none';} loadBundles(); }
+async function downloadBundle(){ if(!BUNDLE) return toast('Open a bundle first.'); const r=await api('/api/download',{path:BUNDLE.path},true); const blob=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=BUNDLE.path.split(/[\\/]/).pop(); a.click(); }
+async function peerCheck(){ try{ const r=await api(`/api/peer/check?url=${encodeURIComponent($('#p-url').value)}`); toast(`Peer OK: ${r.machine} running v${r.version}`); }catch(e){ toast('Peer not reachable: '+e.message); } }
+async function doPush(){ if(!BUNDLE) return toast('Open a bundle first.'); try{ const r=await api('/api/push',{path:BUNDLE.path,url:$('#p-url').value,token:$('#p-token').value}); showLog('Pushed', [`Saved on ${r.reply.machine}: ${r.reply.saved}`,`${r.reply.sessions} session(s). Open the Load page there to install.`]); }catch(e){ toast('Push failed: '+e.message); } }
+
+// ---------- backups ----------
+async function loadBackups(){
+  const r=await api('/api/backups'); $('#bk-table tbody').innerHTML = r.backups.map(b=>`<tr><td>${esc(STATE.labels[b.account]||b.account.slice(0,8))}</td><td>${esc(b.device.slice(0,8))}</td><td>${esc(b.created)}</td><td>${b.records}</td><td class="muted">${esc(b.name)}</td><td><button onclick="restore('${esc(b.path).replace(/\\/g,'\\\\')}',true)">Dry run</button> <button class="danger" onclick="restore('${esc(b.path).replace(/\\/g,'\\\\')}',false)">Restore</button></td></tr>`).join('') || '<tr><td colspan=6 class="muted">no backups yet</td></tr>';
+}
+async function restore(p,dry){ if(!dry && !confirmBig('Restore this backup? The current device folder is backed up first, then replaced.')) return; try{ const r=await api('/api/restore',{path:p,dryRun:dry}); showLog(dry?'Dry run restore':'Restored', r.log); if(!dry) refresh(); }catch(e){ toast(e.message); } }
+
+// ---------- sync / settings ----------
+async function saveSync(run){ try{ const r=await api('/api/sync',{enabled:$('#y-enabled').checked,account:$('#y-account').value,dir:$('#y-dir').value.trim(),interval_min:+$('#y-interval').value||60,runNow:run}); $('#y-log').textContent=(r.log||[]).join('\n')||'saved'; toast('Sync settings saved'); }catch(e){ toast(e.message); } }
+async function saveLabels(){ const labels={}; $$('#labels input').forEach(i=>labels[i.dataset.acc]=i.value.trim()); await api('/api/labels',{labels}); toast('Labels saved'); refresh(); }
+refresh();
+</script>
+</body>
+</html>

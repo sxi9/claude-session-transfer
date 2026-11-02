@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cst-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["cst.py", "serve", "--port", "8765", "--no-browser"],
+      "port": 8765
+    }
+  ]
+}
