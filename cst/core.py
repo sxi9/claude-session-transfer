@@ -132,7 +132,8 @@ def claude_app_running() -> bool:
             out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq claude.exe", "/NH"],
                                  capture_output=True, text=True, timeout=10).stdout
             return "claude.exe" in out.lower()
-        out = subprocess.run(["pgrep", "-fi", "claude"], capture_output=True, text=True, timeout=10).stdout
+        # exact process name only; a looser pattern matches this check's own command line
+        out = subprocess.run(["pgrep", "-xi", "claude"], capture_output=True, text=True, timeout=10).stdout
         return bool(out.strip())
     except Exception:
         return False
