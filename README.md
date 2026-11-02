@@ -20,6 +20,57 @@ python cst.py --help       # command line
 | **Sync & peers** | Scheduled capture of changed sessions into a folder (point it at a shared drive). Peer token for receiving pushes from other PCs. |
 | **Settings** | Friendly labels for account ids. Paths the tool uses. |
 
+## Capture from any PC, nothing installed
+
+Host the tool on one machine (see *Hosting* below) and open
+`http://<host>:8766/capture` in Chrome or Edge on any other PC.
+
+1. Drag your `.claude` folder onto the page (`C:\Users\<you>\.claude` on
+   Windows, `~/.claude` elsewhere), or press **Pick folder**. The browser asks
+   whether the site may view it. Nothing is read before you accept.
+2. The page lists every session it finds. The last seven days are preselected.
+3. Press **Build bundle and upload**. The zip is built in the browser and sent
+   to the host, where it appears on the Load page.
+
+Over plain HTTP on a LAN address, Chrome disables its modern folder picker, so
+the page uses the basic picker and drag-and-drop instead. Both work; the basic
+picker asks "Upload N files?" rather than "view folder?". Nothing is uploaded
+until you press the button.
+
+The sidebar records live in AppData, which browsers refuse to open, so the host
+rebuilds them from the transcripts when the bundle is loaded. Title, folder,
+dates and model are recovered. Firefox has no folder picker, so drag-and-drop
+is the only route there.
+
+## Hosting on a server
+
+```bash
+git clone https://github.com/sxi9/claude-session-transfer.git ~/claude-session-transfer
+cat > ~/.config/systemd/user/cst-web.service <<'UNIT'
+[Unit]
+Description=Claude Session Transfer web UI
+After=network-online.target
+[Service]
+WorkingDirectory=%h/claude-session-transfer
+ExecStart=/usr/bin/python3 %h/claude-session-transfer/cst.py serve --host 0.0.0.0 --port 8766 --no-browser
+Restart=on-failure
+[Install]
+WantedBy=default.target
+UNIT
+systemctl --user daemon-reload && systemctl --user enable --now cst-web
+loginctl enable-linger $USER     # keep it running when logged out
+```
+
+Open the port in the host firewall for your LAN only, for example with
+firewalld:
+
+```bash
+sudo firewall-cmd --permanent --zone=public --add-rich-rule='rule family=ipv4 source address=192.168.1.0/24 port port=8766 protocol=tcp accept' && sudo firewall-cmd --reload
+```
+
+The UI has no login. Anyone who can reach the port can read and delete what
+the host holds, so keep it on a trusted network.
+
 ## Carry a session to another PC
 
 **Option A, bundle file**
@@ -113,6 +164,7 @@ cst.py                     command line entry point
 cst/core.py                all logic: discovery, transfer, capture, load, merge, export, scan, backups, sync, peers
 cst/web.py                 local HTTP server and JSON API
 cst/static/index.html      the web UI, single file, dark mode by system preference
+cst/static/capture.html    browser-side capture page: reads a .claude folder, builds the zip in the browser
 claude_session_transfer.py tkinter window, thin wrapper over cst/core.py
 ```
 
