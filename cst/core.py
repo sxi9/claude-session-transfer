@@ -672,6 +672,55 @@ def _write(dst: Path, data: bytes):
     dst.write_bytes(data)
 
 
+def synthesize_record(transcript: bytes, cli_id: str, title: str | None = None) -> dict:
+    """Build a sidebar record from a transcript alone. Used for bundles made in
+    the browser, where the AppData records are not reachable."""
+    cwd = ""
+    first_user = ""
+    model = ""
+    first_ts = last_ts = None
+    turns = 0
+    for obj, _ in iter_lines(transcript):
+        if not obj:
+            continue
+        if not cwd and obj.get("cwd"):
+            cwd = obj["cwd"]
+        if obj.get("type") == "custom-title" and obj.get("customTitle"):
+            title = title or obj["customTitle"]
+        ts = obj.get("timestamp")
+        if ts:
+            first_ts = first_ts or ts
+            last_ts = ts
+        t = obj.get("type")
+        if t == "user":
+            turns += 1
+            if not first_user:
+                txt = _text_of(obj.get("message") or {}).strip()
+                if txt and not txt.startswith("<"):
+                    first_user = txt
+        elif t == "assistant" and not model:
+            model = (obj.get("message") or {}).get("model", "")
+
+    def ms(iso):
+        if not iso:
+            return int(time.time() * 1000)
+        try:
+            return int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+        except Exception:
+            return int(time.time() * 1000)
+
+    auto_title = (first_user.splitlines()[0][:80] if first_user else "") or f"Imported {cli_id[:8]}"
+    return {
+        "sessionId": f"local_{uuid.uuid4()}", "cliSessionId": cli_id,
+        "cwd": cwd, "originCwd": cwd, "gitAnchorsFolderRealpath": cwd,
+        "createdAt": ms(first_ts), "lastActivityAt": ms(last_ts), "lastFocusedAt": ms(last_ts),
+        "lastTurnEdgeAt": ms(last_ts), "model": model, "effort": "medium", "isArchived": False,
+        "title": title or auto_title, "titleSource": "custom" if title else "auto",
+        "permissionMode": "default", "remoteMcpServersConfig": [], "completedTurns": turns,
+        "importedBy": "claude-session-transfer",
+    }
+
+
 def load(bundle: Path, cli_ids: list[str], target_account_id: str, device_id: str,
          cwd_map: dict[str, str] | None = None, new_id: bool = False, overwrite: bool = False,
          merge: bool = True, import_memory: bool = True, import_project: bool = False,
@@ -695,7 +744,20 @@ def load(bundle: Path, cli_ids: list[str], target_account_id: str, device_id: st
             cid = entry["cliSessionId"]
             if cid not in cli_ids:
                 continue
-            record = json.loads(z.read(f"sessions/{cid}/record.json"))
+            tname = f"sessions/{cid}/transcript.jsonl"
+            if f"sessions/{cid}/record.json" in names:
+                record = json.loads(z.read(f"sessions/{cid}/record.json"))
+            elif tname in names:
+                ttl = None
+                if f"sessions/{cid}/extra/custom-title.json" in names:
+                    try:
+                        ttl = json.loads(z.read(f"sessions/{cid}/extra/custom-title.json")).get("customTitle")
+                    except Exception:
+                        pass
+                record = synthesize_record(z.read(tname), cid, ttl or entry.get("title"))
+            else:
+                log.append(f"SKIP {entry.get('title', cid)!r}: no record and no transcript in bundle")
+                continue
             old_cwd = record.get("cwd", "")
             new_cwd = cwd_map.get(old_cwd, old_cwd)
             for k in ("cwd", "originCwd", "gitAnchorsFolderRealpath"):
@@ -706,7 +768,6 @@ def load(bundle: Path, cli_ids: list[str], target_account_id: str, device_id: st
             rec_path = dest_dir / f"{record['sessionId']}.json"
             proj = projects_root() / cwd_slug(new_cwd)
             tpath = proj / f"{cid}.jsonl"
-            tname = f"sessions/{cid}/transcript.jsonl"
             note = f"  (folder remapped -> {new_cwd})" if new_cwd != old_cwd else ""
 
             if rec_path.exists() and not (overwrite or merge):

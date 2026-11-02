@@ -108,6 +108,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if u.path == "/" or u.path == "/index.html":
                 return self._static("index.html")
+            if u.path == "/capture":
+                return self._static("capture.html")
             if u.path.startswith("/static/"):
                 return self._static(u.path[len("/static/"):])
             if u.path == "/api/peer/info":

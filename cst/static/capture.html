@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capture from this PC</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--line:#e2e5ea;--text:#1d2129;--muted:#6b7280;--accent:#2563eb;--accent-text:#fff;--danger:#dc2626;--ok:#16a34a;--row-hover:#f0f3f8;--row-sel:#e3ecff;--code:#eef1f5}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--line:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#4f8cff;--danger:#f87171;--ok:#4ade80;--row-hover:#1e232d;--row-sel:#1f2d4d;--code:#11141a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;font-weight:650}
+header a{color:var(--accent);text-decoration:none;margin-left:auto}
+main{padding:16px 18px;max-width:1100px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.panel h3{margin:0 0 8px;font-size:14px}
+.muted{color:var(--muted)}.small{font-size:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+label{display:inline-flex;align-items:center;gap:6px}
+input[type=text]{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font:inherit;min-width:220px}
+button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 13px;font:inherit;cursor:pointer}
+button:hover{background:var(--row-hover)}button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}button:disabled{opacity:.5;cursor:not-allowed}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:34px 18px;text-align:center;color:var(--muted);transition:.15s}
+.drop.over{border-color:var(--accent);color:var(--accent);background:var(--row-sel)}
+.drop b{color:var(--text)}
+code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--row-hover)}tbody tr.sel{background:var(--row-sel)}
+.tablewrap{max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.bar{height:8px;background:var(--code);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Consolas,monospace;max-height:30vh;overflow:auto}
+.ok{color:var(--ok)}.bad{color:var(--danger)}
+</style>
+</head>
+<body>
+<header><h1>Capture from this PC</h1><span class="muted small">nothing is installed, nothing leaves this PC until you press Upload</span><a href="/">← main page</a></header>
+<main>
+
+<div class="panel" id="step1">
+  <h3>1. Give the page your Claude folder</h3>
+  <div class="drop" id="drop">
+    <div><b>Drag the <code>.claude</code> folder here</b></div>
+    <div class="small" style="margin-top:6px">Windows: <code>C:\Users\&lt;you&gt;\.claude</code> &nbsp;·&nbsp; Mac/Linux: <code>~/.claude</code>. The <code>projects</code> folder inside it also works.</div>
+    <div class="row" style="justify-content:center;margin-top:14px">
+      <button class="primary" id="pick">Pick folder…</button>
+      <label class="small muted">or <input type="file" id="legacy" webkitdirectory directory multiple style="display:none"> <a href="#" id="legacyLink">use the basic picker</a></label>
+    </div>
+    <div class="small muted" style="margin-top:10px">Your browser will ask whether this site may view the folder. Nothing is read before you accept, and the access ends when you close the tab.</div>
+  </div>
+  <div id="scanmsg" class="small muted" style="margin-top:8px"></div>
+</div>
+
+<div class="panel" id="step2" style="display:none">
+  <h3>2. Choose sessions <span class="muted small" id="count"></span></h3>
+  <div class="row">
+    <input type="text" id="search" placeholder="Search title, folder…" oninput="render()">
+    <button onclick="selAll(true)">Select all</button><button onclick="selAll(false)">Clear</button>
+    <label><input type="checkbox" id="incMemory" checked> include memory for these projects</label>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th>Title</th><th>Working folder</th><th>Last activity</th><th>KB</th><th>Id</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+
+<div class="panel" id="step3" style="display:none">
+  <h3>3. Upload to this server</h3>
+  <div class="row"><label>Name of this PC <input type="text" id="pcname" placeholder="e.g. laptop, office-pc"></label>
+    <button class="primary" id="go" onclick="go()">Build bundle and upload</button></div>
+  <div class="bar"><i id="prog"></i></div>
+  <div id="status" class="small muted" style="margin-top:6px"></div>
+  <pre id="log" style="display:none"></pre>
+</div>
+
+</main>
+<script>
+// ---------------------------------------------------------------- helpers
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let SESSIONS=[], SEL=new Set(), MEMORY={}, SETTINGS=null;
+
+// ---------------------------------------------------------------- folder intake
+// Every intake path ends in a flat list of {path, file}, where path is relative to the
+// folder the user handed over, with forward slashes.
+async function readHandle(dir, prefix, out){
+  for await (const [name, h] of dir.entries()){
+    const p = prefix ? prefix+'/'+name : name;
+    if (h.kind==='file') out.push({path:p, file:await h.getFile()});
+    else if (h.kind==='directory') await readHandle(h, p, out);
+  }
+}
+async function readEntry(entry, prefix, out){
+  if (entry.isFile){ const f = await new Promise((res,rej)=>entry.file(res,rej)); out.push({path:prefix?prefix+'/'+entry.name:entry.name, file:f}); return; }
+  const reader = entry.createReader(); const all=[];
+  for(;;){ const batch = await new Promise((res,rej)=>reader.readEntries(res,rej)); if(!batch.length) break; all.push(...batch); }
+  for (const e of all) await readEntry(e, prefix?prefix+'/'+entry.name:entry.name, out);
+}
+$('#pick').onclick = async ()=>{
+  if (!window.showDirectoryPicker){ $('#legacy').click(); return; }
+  try{ const dir = await showDirectoryPicker({mode:'read'}); const out=[]; setMsg('reading folder…'); await readHandle(dir,'',out); ingest(out); }
+  catch(e){ if(e.name!=='AbortError') setMsg('Could not open folder: '+e.message, true); }
+};
+$('#legacyLink').onclick = e=>{ e.preventDefault(); $('#legacy').click(); };
+$('#legacy').onchange = e=>{ const out=[...e.target.files].map(f=>({path:f.webkitRelativePath.split('/').slice(1).join('/'), file:f})); ingest(out); };
+const drop=$('#drop');
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')}; drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=async e=>{ e.preventDefault(); drop.classList.remove('over'); const out=[]; setMsg('reading folder…');
+  for (const it of e.dataTransfer.items){ const en = it.webkitGetAsEntry && it.webkitGetAsEntry(); if(!en) continue; if(en.isDirectory){ const sub=[]; await readEntry(en,'',sub); sub.forEach(x=>out.push({path:x.path.split('/').slice(1).join('/'), file:x.file})); } }
+  ingest(out); };
+function setMsg(t, bad){ $('#scanmsg').textContent=t; $('#scanmsg').className='small '+(bad?'bad':'muted'); }
+
+// ---------------------------------------------------------------- scanning
+async function ingest(files){
+  // locate the projects/ folder wherever it sits in what we were given
+  let base = null;
+  for (const f of files){ const i = f.path.indexOf('projects/'); if (i>=0 && (i===0 || f.path[i-1]==='/')){ base = f.path.slice(0,i+'projects/'.length); break; } }
+  if (base===null && files.some(f=>/^[^/]+\/[^/]+\.jsonl$/.test(f.path))) base='';   // they gave us projects/ itself
+  if (base===null){ setMsg('No projects folder found. Drop the .claude folder (or its projects folder).', true); return; }
+  const inProj = files.filter(f=>f.path.startsWith(base)).map(f=>({path:f.path.slice(base.length), file:f.file}));
+  const settings = files.find(f=>f.path===(base.replace(/projects\/$/,'')+'settings.json'));
+  SESSIONS=[]; MEMORY={}; SEL=new Set();
+  const bySlug = {};
+  for (const f of inProj){ const parts=f.path.split('/'); if(parts.length<2) continue; (bySlug[parts[0]] ||= []).push({rel:parts.slice(1).join('/'), file:f.file}); }
+  let n=0; const slugs=Object.keys(bySlug);
+  for (const slug of slugs){
+    const items = bySlug[slug];
+    MEMORY[slug] = items.filter(x=>x.rel.startsWith('memory/')).map(x=>({rel:x.rel.slice(7), file:x.file}));
+    for (const it of items){
+      const m = it.rel.match(/^([0-9a-f-]{36})\.jsonl$/); if(!m) continue;
+      const cid = m[1]; n++; setMsg(`scanning ${n} transcript(s)…`);
+      const extra = items.filter(x=>x.rel.startsWith(cid+'/')).map(x=>({rel:x.rel.slice(cid.length+1), file:x.file}));
+      const meta = await scanTranscript(it.file);
+      let title = meta.customTitle;
+      const ct = extra.find(x=>x.rel==='custom-title.json'); if (ct){ try{ title = JSON.parse(await ct.file.text()).customTitle || title; }catch{} }
+      SESSIONS.push({cid, slug, file:it.file, extra, title: title || meta.firstUser || ('Session '+cid.slice(0,8)), cwd: meta.cwd, last: meta.last, lastMs: meta.lastMs, kb: Math.round(it.file.size/1024), hasTitle: !!title});
+      if (meta.lastMs > Date.now()-7*86400e3) SEL.add(cid);   // preselect the last week
+    }
+  }
+  SESSIONS.sort((a,b)=>b.lastMs-a.lastMs);
+  if (!SESSIONS.length){ setMsg('No transcripts found under projects/.', true); return; }
+  setMsg(`Found ${SESSIONS.length} session(s) in ${slugs.length} project folder(s). Sessions from the last 7 days are preselected.`);
+  $('#step2').style.display=''; $('#step3').style.display='';
+  if (!$('#pcname').value) $('#pcname').value = (navigator.userAgentData?.platform || navigator.platform || 'pc').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  render();
+}
+// Reads only the lines that matter: first user message, cwd, custom title, last timestamp.
+async function scanTranscript(file){
+  const head = await file.slice(0, 512*1024).text();          // first 512 KB: cwd + first prompt
+  const tail = await file.slice(Math.max(0,file.size-256*1024)).text();  // last 256 KB: last timestamp, late titles
+  const r={cwd:'', firstUser:'', customTitle:'', last:'', lastMs:0};
+  for (const line of head.split('\n')){
+    if (!r.cwd && line.includes('"cwd"')){ try{ r.cwd = JSON.parse(line).cwd||''; }catch{} }
+    if (!r.firstUser && line.includes('"type":"user"')){ try{ const o=JSON.parse(line); const c=o.message?.content; const t = typeof c==='string'?c:(c||[]).filter(b=>b.type==='text').map(b=>b.text).join(' '); if (t && !t.startsWith('<')) r.firstUser=t.split('\n')[0].slice(0,80); }catch{} }
+    if (r.cwd && r.firstUser) break;
+  }
+  for (const line of tail.split('\n').reverse()){
+    if (line.includes('"customTitle"') && !r.customTitle){ try{ r.customTitle = JSON.parse(line).customTitle||''; }catch{} }
+    if (!r.last && line.includes('"timestamp"')){ try{ const ts=JSON.parse(line).timestamp; if(ts){ r.lastMs=Date.parse(ts); r.last=new Date(r.lastMs).toISOString().slice(0,16).replace('T',' '); } }catch{} }
+    if (r.last && r.customTitle) break;
+  }
+  return r;
+}
+function render(){
+  const q=$('#search').value.trim().toLowerCase();
+  const rows=SESSIONS.filter(s=>!q||(s.title+' '+s.cwd+' '+s.cid).toLowerCase().includes(q));
+  $('#rows').innerHTML = rows.map(s=>`<tr data-id="${s.cid}" class="${SEL.has(s.cid)?'sel':''}"><td title="${esc(s.title)}">${esc(s.title)}</td><td>${esc(s.cwd)}</td><td>${s.last}</td><td>${s.kb}</td><td class="muted">${s.cid.slice(0,8)}</td></tr>`).join('');
+  $('#rows').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>{ const id=tr.dataset.id; SEL.has(id)?SEL.delete(id):SEL.add(id); render(); });
+  const sz = SESSIONS.filter(s=>SEL.has(s.cid)).reduce((a,s)=>a+s.kb,0);
+  $('#count').textContent = `${rows.length} shown · ${SEL.size} selected · ${(sz/1024).toFixed(1)} MB`;
+  $('#go').disabled = !SEL.size;
+}
+function selAll(v){ SEL = v ? new Set(SESSIONS.map(s=>s.cid)) : new Set(); render(); }
+
+// ---------------------------------------------------------------- zip writer (deflate via CompressionStream, else stored)
+const CRC = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(buf, crc=0){ crc = crc ^ 0xFFFFFFFF; for (let i=0;i<buf.length;i++) crc = CRC[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8); return (crc ^ 0xFFFFFFFF)>>>0; }
+async function deflate(bytes){
+  if (!window.CompressionStream) return null;
+  const cs = new CompressionStream('deflate-raw'); const w = cs.writable.getWriter(); w.write(bytes); w.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+class ZipWriter{
+  constructor(){ this.parts=[]; this.central=[]; this.offset=0; this.enc=new TextEncoder(); }
+  async add(name, bytes){
+    const nameB = this.enc.encode(name); const crc = crc32(bytes);
+    let data = bytes, method = 0;
+    if (bytes.length > 64){ const d = await deflate(bytes); if (d && d.length < bytes.length){ data = d; method = 8; } }
+    const now = new Date(); const dosTime = (now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1); const dosDate = ((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true); lh.setUint16(8,method,true);
+    lh.setUint16(10,dosTime,true); lh.setUint16(12,dosDate,true); lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true); lh.setUint32(22,bytes.length,true); lh.setUint16(26,nameB.length,true); lh.setUint16(28,0,true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true); ch.setUint16(10,method,true);
+    ch.setUint16(12,dosTime,true); ch.setUint16(14,dosDate,true); ch.setUint32(16,crc,true); ch.setUint32(20,data.length,true); ch.setUint32(24,bytes.length,true); ch.setUint16(28,nameB.length,true);
+    ch.setUint32(42,this.offset,true);
+    this.parts.push(lh.buffer, nameB, data); this.offset += 30 + nameB.length + data.length;
+    this.central.push(ch.buffer, nameB);
+  }
+  blob(){
+    const cdSize = this.central.reduce((a,b)=>a+b.byteLength,0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0,0x06054b50,true); end.setUint16(8,this.central.length/2,true); end.setUint16(10,this.central.length/2,true); end.setUint32(12,cdSize,true); end.setUint32(16,this.offset,true);
+    return new Blob([...this.parts, ...this.central, end.buffer], {type:'application/zip'});
+  }
+}
+
+// ---------------------------------------------------------------- build + upload
+async function go(){
+  const chosen = SESSIONS.filter(s=>SEL.has(s.cid)); if(!chosen.length) return;
+  const pc = ($('#pcname').value.trim()||'pc').replace(/[^A-Za-z0-9_-]+/g,'-');
+  const log=[]; const L=t=>{ log.push(t); $('#log').style.display=''; $('#log').textContent=log.join('\n'); $('#log').scrollTop=1e9; };
+  $('#go').disabled=true; const prog=$('#prog'); const st=$('#status');
+  try{
+    const z = new ZipWriter(); const manifest={bundleVersion:2, createdAt:new Date().toISOString().slice(0,19), sourceMachine:pc, sourcePlatform:'browser', sourceAccount:null, sessions:[], memory:[], project:[], settings:[]};
+    let i=0; const slugsDone=new Set();
+    for (const s of chosen){
+      st.textContent=`packing ${++i}/${chosen.length}: ${s.title}`; prog.style.width=(i/chosen.length*60)+'%';
+      await z.add(`sessions/${s.cid}/transcript.jsonl`, new Uint8Array(await s.file.arrayBuffer()));
+      for (const x of s.extra) await z.add(`sessions/${s.cid}/extra/${x.rel}`, new Uint8Array(await x.file.arrayBuffer()));
+      manifest.sessions.push({cliSessionId:s.cid, sessionId:null, title:s.title, cwd:s.cwd, lastActivityAt:s.lastMs, hasTranscript:true, transcriptKB:s.kb, recordMissing:true});
+      L(`PACKED ${s.title}`);
+      if ($('#incMemory').checked && !slugsDone.has(s.slug) && (MEMORY[s.slug]||[]).length){
+        slugsDone.add(s.slug);
+        for (const m of MEMORY[s.slug]) await z.add(`memory/${s.slug}/${m.rel}`, new Uint8Array(await m.file.arrayBuffer()));
+        manifest.memory.push({cwd:s.cwd, slug:s.slug, files:MEMORY[s.slug].length}); L(`MEMORY ${s.cwd}: ${MEMORY[s.slug].length} files`);
+      }
+    }
+    await z.add('manifest.json', new TextEncoder().encode(JSON.stringify(manifest,null,2)));
+    const blob = z.blob(); L(`Bundle built: ${(blob.size/1048576).toFixed(1)} MB. Uploading…`);
+    const name = `browser-${pc}-${new Date().toISOString().replace(/[:T]/g,'-').slice(0,16)}.zip`;
+    const reply = await new Promise((res,rej)=>{ const x=new XMLHttpRequest(); x.open('POST','/api/upload'); x.setRequestHeader('X-Bundle-Name',name);
+      x.upload.onprogress=e=>{ if(e.lengthComputable){ prog.style.width=(60+e.loaded/e.total*40)+'%'; st.textContent=`uploading ${(e.loaded/1048576).toFixed(1)} / ${(e.total/1048576).toFixed(1)} MB`; } };
+      x.onload=()=>{ try{ const j=JSON.parse(x.responseText); j.error?rej(new Error(j.error)):res(j); }catch(e){ rej(new Error('bad reply '+x.status)); } }; x.onerror=()=>rej(new Error('network error')); x.send(blob); });
+    prog.style.width='100%'; st.innerHTML=`<span class="ok">Done.</span> Saved on the server as <code>${esc(reply.path.split(/[\\/]/).pop())}</code>. <a href="/#load">Open the Load page</a> to install it on any PC.`;
+    L(`UPLOADED -> ${reply.path}`);
+  }catch(e){ st.innerHTML=`<span class="bad">Failed: ${esc(e.message)}</span>`; L('ERROR '+e.message); }
+  finally{ $('#go').disabled=false; }
+}
+window.processEntries = ingest;   // for testing: feed [{path,file}] directly
+</script>
+</body>
+</html>

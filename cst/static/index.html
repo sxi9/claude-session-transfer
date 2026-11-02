@@ -66,6 +66,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <button data-page="backups">Backups</button>
   <button data-page="sync">Sync &amp; peers</button>
   <button data-page="settings">Settings</button>
+  <a href="/capture" style="margin-left:auto;align-self:center;padding:6px 12px;color:var(--accent);text-decoration:none;font-weight:550">Capture from this PC →</a>
 </nav>
 <main>
 
@@ -386,6 +387,7 @@ async function restore(p,dry){ if(!dry && !confirmBig('Restore this backup? The 
 async function saveSync(run){ try{ const r=await api('/api/sync',{enabled:$('#y-enabled').checked,account:$('#y-account').value,dir:$('#y-dir').value.trim(),interval_min:+$('#y-interval').value||60,runNow:run}); $('#y-log').textContent=(r.log||[]).join('\n')||'saved'; toast('Sync settings saved'); }catch(e){ toast(e.message); } }
 async function saveLabels(){ const labels={}; $$('#labels input').forEach(i=>labels[i.dataset.acc]=i.value.trim()); await api('/api/labels',{labels}); toast('Labels saved'); refresh(); }
 refresh();
+if(location.hash==='#load'){ document.querySelector('nav button[data-page=load]').click(); }
 </script>
 </body>
 </html>
