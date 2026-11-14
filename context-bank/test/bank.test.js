@@ -167,3 +167,47 @@ test('claude.ai export: parse, bank as sessions, convert to transcript, import',
   assert.ok(fs.existsSync(path.join(C.projectsRoot(), C.cwdSlug(CWD), list[0].uuid + '.jsonl')));
   assert.match(buildHandoff(bank.transcript(list[0].uuid), m), /Kyoto/);
 });
+
+test('project Claude files, global setup and repo pointer travel with a session', () => {
+  const { execFileSync } = require('child_process');
+  const proj = path.join(tmp, 'work', 'myproj');
+  fs.mkdirSync(path.join(proj, '.claude', 'commands'), { recursive: true });
+  fs.writeFileSync(path.join(proj, 'CLAUDE.md'), '# project rules');
+  fs.writeFileSync(path.join(proj, '.claude', 'commands', 'ship.md'), 'ship it');
+  execFileSync('git', ['init', '-q', '-b', 'feature-x', proj]);
+  execFileSync('git', ['-C', proj, 'remote', 'add', 'origin', 'https://user:secret@github.com/acme/myproj.git']);
+  C.writeFile(path.join(C.claudeHome(), 'CLAUDE.md'), '# my global rules');
+  C.writeFile(path.join(C.claudeHome(), 'commands', 'hello.md'), 'hello');
+  C.writeFile(path.join(C.claudeHome(), 'settings.json'), '{"env":{"KEY":"sk-secret"}}');
+  const CLI2 = '22222222-3333-4444-5555-666666666666';
+  const t = Buffer.from(JSON.stringify({ uuid: 'p1', type: 'user', cwd: proj, timestamp: '2026-02-01T10:00:00Z', message: { role: 'user', content: 'start the project' } }) + '\n'
+    + JSON.stringify({ uuid: 'p2', type: 'assistant', cwd: proj, timestamp: '2026-02-01T10:00:30Z', message: { role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'started' }] } }) + '\n');
+  const tp = path.join(C.projectsRoot(), C.cwdSlug(proj), CLI2 + '.jsonl');
+  C.writeFile(tp, t);
+  const r = bank.bankSession({ cliId: CLI2, transcript: tp });
+  assert.equal(r.status, 'added');
+  const m = bank.meta(CLI2);
+  assert.equal(m.repoUrl, 'https://github.com/acme/myproj.git', 'credentials stripped from the remote');
+  assert.equal(m.branch, 'feature-x');
+  assert.equal(m.projectFiles, 2);
+  assert.ok(bank.bankConfig() >= 2);
+  assert.ok(!fs.existsSync(path.join(bank.bankRoot(), 'config', 'global', 'settings.json')), 'settings.json is kept out of the shareable config');
+  // bundle round trip into a clean bank
+  const out = path.join(tmp, 'cfg.zip');
+  bank.exportBundle([CLI2], out);
+  const names = new ZipReader(fs.readFileSync(out)).names();
+  assert.ok(names.includes(`project/${C.cwdSlug(proj)}/CLAUDE.md`));
+  assert.ok(names.includes('config/commands/hello.md'));
+  assert.ok(!names.some(n => n.includes('settings.json')));
+  assert.equal(JSON.parse(new ZipReader(fs.readFileSync(out)).read(`sessions/${CLI2}/record.json`).toString()).repoUrl, 'https://github.com/acme/myproj.git');
+  // import to a new folder on "another PC": project files land, existing ones are kept, config restored without overwrite
+  const proj2 = path.join(tmp, 'work2', 'myproj'); fs.mkdirSync(proj2, { recursive: true });
+  fs.writeFileSync(path.join(proj2, 'CLAUDE.md'), '# local version wins');
+  fs.rmSync(path.join(C.claudeHome(), 'commands', 'hello.md'));
+  const res = bank.importToAccount([CLI2], { accountId: ACC, deviceId: DEV, cwdMap: { [proj]: proj2 }, includeConfig: true });
+  assert.ok(res.log.some(l => /PROJECT .*1 Claude files added, 1 kept/.test(l)), res.log.join('\n'));
+  assert.equal(fs.readFileSync(path.join(proj2, 'CLAUDE.md'), 'utf8'), '# local version wins');
+  assert.ok(fs.existsSync(path.join(proj2, '.claude', 'commands', 'ship.md')));
+  assert.ok(fs.existsSync(path.join(C.claudeHome(), 'commands', 'hello.md')));
+  assert.equal(fs.readFileSync(path.join(C.claudeHome(), 'CLAUDE.md'), 'utf8'), '# my global rules');
+});

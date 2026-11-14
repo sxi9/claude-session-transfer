@@ -56,7 +56,17 @@ function bankSession(source, { includeMemory = true } = {}) {
   let record = source.record || (old && old.record) || null;
   if (!record) record = C.synthesizeRecord(full, cliId, source.title || null);
   if (!record.cliSessionId) record.cliSessionId = cliId;
+  // where the work lives: git remote + branch of the working folder, kept in the record so it travels in bundles
+  const git = record.cwd ? C.gitInfo(record.cwd) : { repoUrl: '', branch: '' };
+  if (!record.repoUrl) record.repoUrl = git.repoUrl || (old && old.repoUrl) || '';
+  if (!record.branch) record.branch = git.branch || (old && old.branch) || '';
   C.writeFile(path.join(dir, 'record.json'), JSON.stringify(record));
+  // project-level Claude files (CLAUDE.md, .claude/) of the working folder
+  let projectCount = 0;
+  if (record.cwd && source.transcript) {
+    const projDst = path.join(bankRoot(), 'project', C.cwdSlug(record.cwd));
+    for (const f of C.projectFiles(record.cwd)) { try { C.writeFile(path.join(projDst, f.rel), fs.readFileSync(f.abs)); projectCount++; } catch {} }
+  }
   // extra files
   const extra = source.extraFiles || (source.extraDir && fs.existsSync(source.extraDir)
     ? C.walk(source.extraDir).map(f => ({ rel: f.rel, buf: fs.readFileSync(f.abs) })) : []);
@@ -76,7 +86,7 @@ function bankSession(source, { includeMemory = true } = {}) {
   else if (source.account) origins.add(`${source.account}/${source.device || ''}`);
   const meta = {
     cliId, title: title || record.title || '(untitled)', cwd: record.cwd || s.cwd || '', model: s.model || record.model || '',
-    branch: s.branch, version: s.version, firstTs: s.firstTs, lastTs: s.lastTs,
+    branch: s.branch || record.branch || '', repoUrl: record.repoUrl || '', projectFiles: projectCount || (old && old.projectFiles) || 0, version: s.version, firstTs: s.firstTs, lastTs: s.lastTs,
     lastActivityMs: Math.max(Number(record.lastActivityAt || 0), C.msOf(s.lastTs) || 0), createdMs: Number(record.createdAt || 0) || C.msOf(s.firstTs),
     userTurns: s.userTurns, assistantTurns: s.assistantTurns, firstUser: s.firstUser.slice(0, 600), lastAssistant: s.lastAssistant.slice(-600),
     files: s.files.slice(0, 200), tools: s.tools, sizeKB: Math.floor(full.length / 1024), sha: sha(full),
@@ -154,6 +164,30 @@ function remove(cliId) {
 }
 
 // Bank everything Claude knows about on this PC: every account's records plus orphan transcripts.
+// Snapshot the user's own Claude setup (global CLAUDE.md, commands, skills, agents; settings.json
+// goes to a separate folder because it can hold keys).
+function configDir() { return path.join(bankRoot(), 'config', 'global'); }
+function bankConfig() {
+  let n = 0;
+  for (const f of C.globalConfigFiles()) { try { C.writeFile(path.join(configDir(), f.rel), fs.readFileSync(f.abs)); n++; } catch {} }
+  const st = path.join(C.claudeHome(), 'settings.json');
+  if (fs.existsSync(st)) { try { C.writeFile(path.join(bankRoot(), 'config', 'private', 'settings.json'), fs.readFileSync(st)); } catch {} }
+  return n;
+}
+function configCount() { return fs.existsSync(configDir()) ? C.walk(configDir()).length : 0; }
+// Put the banked setup back into ~/.claude. Never overwrites: an existing file stays as it is.
+function restoreConfig({ dryRun = false } = {}) {
+  let added = 0, kept = 0;
+  if (!fs.existsSync(configDir())) return { added, kept };
+  for (const f of C.walk(configDir())) {
+    const dst = path.join(C.claudeHome(), f.rel);
+    if (fs.existsSync(dst)) { kept++; continue; }
+    if (!dryRun) C.writeFile(dst, fs.readFileSync(f.abs));
+    added++;
+  }
+  return { added, kept };
+}
+
 function bankLive({ includeMemory = true, onlyChanged = true } = {}, onProgress = () => {}) {
   const { accounts, orphans } = C.discoverAll();
   const results = { added: 0, merged: 0, unchanged: 0, skipped: 0, items: [] };
@@ -173,6 +207,7 @@ function bankLive({ includeMemory = true, onlyChanged = true } = {}, onProgress 
   };
   for (const a of accounts) for (const s of a.sessions) consider(s, `${os.hostname()}:${a.id}/${s.device}`);
   for (const s of orphans) consider(s, `${os.hostname()}:orphan`);
+  results.config = bankConfig();
   const cfg = loadConfig(); cfg.lastAutoBank = Date.now(); saveConfig(cfg);
   return results;
 }
@@ -215,6 +250,14 @@ function bankBundle(zipPath, onProgress = () => {}) {
     const prefix = `memory/${m.slug}/`;
     for (const n of names) if (n.startsWith(prefix) && !n.endsWith('/')) C.writeFile(path.join(bankRoot(), 'memory', m.slug, n.slice(prefix.length)), z.read(n));
   }
+  for (const m of manifest.project || []) {
+    const prefix = `project/${m.slug}/`;
+    for (const n of names) if (n.startsWith(prefix) && !n.endsWith('/')) C.writeFile(path.join(bankRoot(), 'project', m.slug, n.slice(prefix.length)), z.read(n));
+  }
+  for (const n of names) if (n.startsWith('config/') && !n.endsWith('/') && !n.includes('..')) {
+    const dst = path.join(configDir(), n.slice('config/'.length));
+    if (!fs.existsSync(dst)) C.writeFile(dst, z.read(n));
+  }
   return results;
 }
 
@@ -240,8 +283,9 @@ function bankChats(list, { cwd, origin = 'claude.ai' } = {}, onProgress = () => 
 }
 
 // Export banked sessions as a bundle zip (same layout as claude-session-transfer, so either tool loads it).
-function exportBundle(cliIds, outPath, { includeMemory = true } = {}) {
+function exportBundle(cliIds, outPath, { includeMemory = true, includeProject = true, includeConfig = true } = {}) {
   const zw = new ZipWriter();
+  const projSlugs = new Set();
   const manifest = { bundleVersion: C.BUNDLE_VERSION, createdAt: new Date().toISOString().slice(0, 19), sourceMachine: os.hostname(),
     sourcePlatform: process.platform, sourceAccount: null, sessions: [], memory: [], project: [], settings: [], exportedBy: 'context-bank' };
   const slugs = new Set();
@@ -260,6 +304,18 @@ function exportBundle(cliIds, outPath, { includeMemory = true } = {}) {
       for (const f of files) zw.add(`memory/${slug}/${f.rel}`, fs.readFileSync(f.abs));
       manifest.memory.push({ cwd: m.cwd, slug, files: files.length });
     }
+    const projDir = path.join(bankRoot(), 'project', slug);
+    if (includeProject && !projSlugs.has(slug) && fs.existsSync(projDir)) {
+      projSlugs.add(slug);
+      const files = C.walk(projDir);
+      for (const f of files) zw.add(`project/${slug}/${f.rel}`, fs.readFileSync(f.abs));
+      manifest.project.push({ cwd: m.cwd, slug, files: files.length });
+    }
+  }
+  if (includeConfig && fs.existsSync(configDir())) {
+    const files = C.walk(configDir());
+    for (const f of files) zw.add(`config/${f.rel}`, fs.readFileSync(f.abs));
+    manifest.config = { files: files.length };
   }
   zw.add('manifest.json', JSON.stringify(manifest, null, 2));
   zw.writeFile(outPath);
@@ -267,7 +323,8 @@ function exportBundle(cliIds, outPath, { includeMemory = true } = {}) {
 }
 
 // Install banked sessions into an account on this PC so Claude Desktop lists them and can resume.
-function importToAccount(cliIds, { accountId, deviceId, cwdMap = {}, newId = false, overwrite = false, merge = true, dryRun = false, includeMemory = true, backup = true }, onProgress = () => {}) {
+function importToAccount(cliIds, { accountId, deviceId, cwdMap = {}, newId = false, overwrite = false, merge = true, dryRun = false, includeMemory = true, includeProject = true, includeConfig = false, backup = true }, onProgress = () => {}) {
+  const projDone = new Set();
   const log = [];
   const destDir = path.join(C.sessionsRoot(), accountId, deviceId);
   if (!dryRun && backup) { const b = C.backupFolder(destDir); if (b) log.push(`Backup of ${accountId.slice(0, 8)}…/${deviceId.slice(0, 8)}… -> ${b}`); }
@@ -296,9 +353,25 @@ function importToAccount(cliIds, { accountId, deviceId, cwdMap = {}, newId = fal
       }
       log.push(`${dryRun ? 'DRY ' : ''}MEMORY ${newCwd}: ${added} files added, ${kept} kept`);
     }
+    const projSrc = path.join(bankRoot(), 'project', C.cwdSlug(m.cwd));
+    if (includeProject && !projDone.has(newCwd) && fs.existsSync(projSrc)) {
+      projDone.add(newCwd);
+      if (!fs.existsSync(newCwd)) log.push(`PROJECT ${newCwd}: folder missing here, Claude files kept in the bank`);
+      else {
+        let added = 0, kept = 0;
+        for (const f of C.walk(projSrc)) {
+          const dst = path.join(newCwd, f.rel);
+          if (fs.existsSync(dst)) { kept++; continue; }       // never overwrite a project's own files
+          if (!dryRun) C.writeFile(dst, fs.readFileSync(f.abs));
+          added++;
+        }
+        log.push(`${dryRun ? 'DRY ' : ''}PROJECT ${newCwd}: ${added} Claude files added, ${kept} kept`);
+      }
+    }
   }
+  if (includeConfig) { const r = restoreConfig({ dryRun }); log.push(`${dryRun ? 'DRY ' : ''}CONFIG ~/.claude: ${r.added} files added, ${r.kept} kept (never overwritten)`); }
   return { log, installed };
 }
 
-module.exports = { bankRoot, sessionsDir, sessionDir, loadConfig, saveConfig, bankSession, list, has, meta, transcript, record,
+module.exports = { bankConfig, restoreConfig, configCount, bankRoot, sessionsDir, sessionDir, loadConfig, saveConfig, bankSession, list, has, meta, transcript, record,
   extraFiles, textOf, search, remove, bankLive, bankFolder, bankBundle, bankChats, exportBundle, importToAccount, plainText };

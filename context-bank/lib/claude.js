@@ -417,7 +417,43 @@ function installSession(source, { accountId, deviceId, cwdMap = {}, newId = fals
   return { log, recordPath: recPath, transcriptPath: tpath, sessionId: record.sessionId };
 }
 
+// Where the work lives: the git remote and branch of a working folder.
+function gitInfo(cwd) {
+  const out = { repoUrl: '', branch: '' };
+  if (!cwd || !fs.existsSync(path.join(cwd, '.git'))) return out;
+  const run = (args) => { try { return execFileSync('git', ['-C', cwd, ...args], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
+  out.repoUrl = run(['remote', 'get-url', 'origin']).replace(/\/\/[^/@]+@/, '//');   // never keep credentials embedded in a remote
+  out.branch = run(['symbolic-ref', '--short', 'HEAD']) || run(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (out.branch === 'HEAD') out.branch = '';
+  return out;
+}
+
+const MAX_CFG_FILE = 2 * 1024 * 1024;
+function smallFiles(dir, base, cap = 1500) {
+  return walk(dir, base).filter(f => { try { return fs.statSync(f.abs).size <= MAX_CFG_FILE; } catch { return false; } }).slice(0, cap);
+}
+// Project-level Claude files worth carrying with a session: CLAUDE.md and .claude/.
+function projectFiles(cwd) {
+  const out = [];
+  if (!cwd || !fs.existsSync(cwd)) return out;
+  for (const name of ['CLAUDE.md', 'CLAUDE.local.md']) { const p = path.join(cwd, name); if (fs.existsSync(p) && fs.statSync(p).isFile()) out.push({ abs: p, rel: name }); }
+  const d = path.join(cwd, '.claude');
+  if (fs.existsSync(d)) out.push(...smallFiles(d, cwd, 400).filter(f => !/^\.claude\/(worktrees|cache|tmp)\//.test(f.rel)));
+  return out;
+}
+// The user's own Claude setup: instructions, commands, skills, agents. settings.json can hold
+// keys, so it is banked separately and never restored or exported unless asked.
+function globalConfigFiles({ withSettings = false } = {}) {
+  const home = claudeHome(); const out = [];
+  for (const name of ['CLAUDE.md', 'keybindings.json'].concat(withSettings ? ['settings.json'] : [])) {
+    const p = path.join(home, name); if (fs.existsSync(p) && fs.statSync(p).isFile()) out.push({ abs: p, rel: name });
+  }
+  for (const sub of ['commands', 'skills', 'agents', 'output-styles']) { const d = path.join(home, sub); if (fs.existsSync(d)) out.push(...smallFiles(d, home)); }
+  return out;
+}
+
 module.exports = {
+  gitInfo, projectFiles, globalConfigFiles,
   BUNDLE_VERSION, appDataDir, claudeHome, sessionsRoot, backupsRoot, projectsRoot, configFile, cwdSlug,
   readConfig, currentAccountId, deviceIdHint, claudeAppRunning, iterLines, textOf, conversation, isSpokenUser,
   summarize, synthesizeRecord, mergeTranscripts, remapTranscript, discover, discoverOrphans, discoverAll,

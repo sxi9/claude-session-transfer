@@ -48,7 +48,7 @@ const ops = {
     const all = bank.list();
     return {
       accounts: d.accounts.map(a => ({ id: a.id, label: cfg.labels[a.id] || '', devices: a.devices, sessions: a.sessions.length, current: a.id === d.currentAccount })),
-      orphans: d.orphans.length, currentAccount: d.currentAccount, deviceHint: d.deviceHint, bankCount: all.length, chatCount: all.filter(m => m.chat).length,
+      orphans: d.orphans.length, currentAccount: d.currentAccount, deviceHint: d.deviceHint, bankCount: all.length, chatCount: all.filter(m => m.chat).length, configFiles: bank.configCount(),
       config: cfg, claudeRunning: C.claudeAppRunning(), platform: process.platform, hostname: os.hostname(),
       paths: { bank: bank.bankRoot(), sessions: C.sessionsRoot(), projects: C.projectsRoot(), backups: C.backupsRoot() }, maximized,
     };

@@ -119,6 +119,7 @@ async function openSession(cliId, quiet) {
   $('#d-title').textContent = m.title || s.title;
   const bits = [];
   bits.push(`<span title="${esc(m.cwd)}" class="${m.cwdExists ? '' : 'bad'}">${esc(shortPath(m.cwd)) || '(no folder)'}${m.cwdExists ? '' : ' · folder missing here'}</span>`);
+  if (m.repoUrl) bits.push(`<span title="${esc(m.repoUrl)}">repo ${esc(m.repoUrl.replace(/\.git$/, '').split('/').slice(-2).join('/'))}</span>`);
   if (m.branch) bits.push(`branch ${esc(m.branch)}`);
   if (m.model) bits.push(esc(m.model));
   bits.push(`${m.userTurns ?? '?'} user turns · ${m.assistantTurns ?? '?'} replies · ${S.detail.lines} lines`);
@@ -137,7 +138,7 @@ async function openSession(cliId, quiet) {
   renderChat();
   const files = m.files || [];
   $('#tab-files').innerHTML = files.length ? `<div class="filelist">${files.map(f => `<div>${esc(f)}</div>`).join('')}</div>` : '<div class="muted">No file paths were touched by tools in this session.</div>';
-  const kv = [['Session id', cliId], ['Sidebar id', (m.record && m.record.sessionId) || m.id || ''], ['Working folder', m.cwd], ['Folder exists here', m.cwdExists ? 'yes' : 'no'], ['Model', m.model], ['Git branch', m.branch],
+  const kv = [['Session id', cliId], ['Sidebar id', (m.record && m.record.sessionId) || m.id || ''], ['Working folder', m.cwd], ['Folder exists here', m.cwdExists ? 'yes' : 'no'], ['Model', m.model], ['Repository', m.repoUrl], ['Git branch', m.branch], ['Project Claude files banked', m.projectFiles ? String(m.projectFiles) : ''],
     ['Claude Code version', m.version], ['Created', fmtDate(m.createdMs)], ['Last activity', fmtDate(m.lastActivityMs)], ['Tools used', (m.tools || []).join(', ')], ['Transcript size', (m.sizeKB ?? '') + ' KB'],
     ['Banked at', fmtDate(m.bankedAt)], ['First banked', fmtDate(m.firstBankedAt)], ['Origins', (m.origins || []).join('\n')], ['Live transcript', m.live ? m.live.transcript : (m.transcript || '')], ['Account', m.account], ['Cloud session', m.cloudUrl]];
   $('#tab-info').innerHTML = `<dl class="kv">${kv.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
@@ -202,7 +203,7 @@ function importOpts(dryRun) {
   $$('#i-remap .remap').forEach(div => { const v = div.querySelector('input').value.trim(); if (v && v !== div.dataset.cwd) cwdMap[div.dataset.cwd] = v; });
   const mode = $('#i-mode').value;
   return { accountId: $('#i-account').value, deviceId: $('#i-device').value, cwdMap, newId: $('#i-newid').checked, merge: mode === 'merge', overwrite: mode === 'overwrite',
-    includeMemory: $('#i-memory').checked, backup: $('#i-backup').checked, dryRun };
+    includeMemory: $('#i-memory').checked, includeProject: $('#i-project').checked, includeConfig: $('#i-config').checked, backup: $('#i-backup').checked, dryRun };
 }
 async function runImport(dryRun) {
   $('#i-go').disabled = $('#i-dry').disabled = true;
@@ -221,7 +222,7 @@ async function openSettings() {
   $('#s-auto').checked = !!cfg.autoBank; $('#s-min').value = cfg.autoBankMinutes || 5; $('#s-memory').checked = cfg.includeMemory !== false;
   $('#s-labels').innerHTML = S.state.accounts.map(a => `<div class="lbl"><code title="${esc(a.id)}">${esc(shortId(a.id))}</code><input type="text" data-id="${esc(a.id)}" value="${esc(cfg.labels[a.id] || '')}" placeholder="e.g. work, personal"></div>`).join('') || '<div class="muted small">No accounts found.</div>';
   $('#s-sources').textContent = (cfg.sources || []).join('\n') || 'none yet';
-  $('#s-paths').innerHTML = Object.entries(S.state.paths).map(([k, v]) => `<div><b>${esc(k)}</b>: ${esc(v)}</div>`).join('');
+  $('#s-paths').innerHTML = Object.entries(S.state.paths).map(([k, v]) => `<div><b>${esc(k)}</b>: ${esc(v)}</div>`).join('') + `<div><b>Claude setup banked</b>: ${S.state.configFiles || 0} files (global CLAUDE.md, commands, skills, agents)</div>`;
   const bks = await window.bank.backups();
   $('#s-backups').innerHTML = bks.length ? bks.slice(0, 30).map(b => `<div class="bk"><span class="grow">${esc(fmtDate(b.createdMs))} · ${esc(shortId(b.account))} · ${b.records} records</span><button data-restore="${esc(b.path)}">Restore</button></div>`).join('') : '<div class="muted">No backups yet. One is made before every import.</div>';
   $('#m-settings').classList.remove('hidden');

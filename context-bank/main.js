@@ -216,9 +216,28 @@ ipcMain.handle('resume', async (_e, cliId, cwd) => {
     if (!m) return { ok: false, message: 'Not banked and not on this PC' };
     dir = cwd || m.cwd;
     if (!dir || !fs.existsSync(dir)) {
-      const r = await dialog.showOpenDialog(win, { title: `Pick the folder to continue "${m.title}" in (original: ${m.cwd || 'unknown'})`, properties: ['openDirectory'] });
+      let clone = false;
+      if (m.repoUrl) {
+        const c = await dialog.showMessageBox(win, { type: 'question', buttons: ['Clone the repo', 'Pick an existing folder', 'Cancel'], defaultId: 0, cancelId: 2,
+          message: `The working folder for "${m.title}" is not on this PC`,
+          detail: `Original folder: ${m.cwd || 'unknown'}\nRepository: ${m.repoUrl}${m.branch ? '\nBranch: ' + m.branch : ''}\n\nClone it now, or point to a copy you already have.` });
+        if (c.response === 2) return { ok: false, message: 'Cancelled' };
+        clone = c.response === 0;
+      }
+      const r = await dialog.showOpenDialog(win, { title: clone ? 'Pick the parent folder to clone into' : `Pick the folder to continue "${m.title}" in (original: ${m.cwd || 'unknown'})`, properties: ['openDirectory', 'createDirectory'] });
       if (r.canceled || !r.filePaths.length) return { ok: false, message: 'Cancelled' };
       dir = r.filePaths[0];
+      if (clone) {
+        const name = m.repoUrl.replace(/\.git$/, '').split('/').pop() || 'repo';
+        const dest = path.join(dir, name);
+        if (!fs.existsSync(dest)) {
+          progress(`Cloning ${m.repoUrl}…`);
+          const ok = await new Promise(res => execFile('git', ['clone', m.repoUrl, dest], { timeout: 600000 }, (err) => res(!err)));
+          if (!ok) return { ok: false, message: `git clone failed for ${m.repoUrl}. Clone it yourself, then use Resume and pick the folder.` };
+        }
+        if (m.branch) await new Promise(res => execFile('git', ['-C', dest, 'checkout', m.branch], { timeout: 60000 }, () => res()));
+        dir = dest;
+      }
     }
     await S('prepareResume', cliId, dir);
   } else dir = cwd || live.cwd;

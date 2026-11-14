@@ -35,6 +35,7 @@ workflow. The exe is unsigned, so SmartScreen shows "More info" > "Run anyway" t
 | **Auto bank** | Every few minutes (default 5) changed sessions are banked again. Re-banking merges by message id, so nothing is lost when a session continues on either side. |
 | **Search** | One box searches title, folder, first request, last reply, branch and model instantly, and, with *in messages* on, the full text of every conversation. Results show a highlighted snippet. |
 | **Chat viewer** | Each session's conversation with user and Claude turns, collapsible tool calls, results and thinking blocks, the files it touched, and all the metadata. |
+| **Claude setup and project files** | Banks your global `~/.claude` setup (CLAUDE.md, commands, skills, agents) and each project's `CLAUDE.md` and `.claude/` folder, and records the git repository and branch of every session. Import can put them back without ever overwriting an existing file. `settings.json` is kept in a private folder and never exported, since it can hold keys. If the working folder is missing, Resume offers to clone the repository. |
 | **Import to account** | Pick any account and device on this PC, merge / overwrite / keep-existing, optional new sidebar id, remap the working folder when it does not exist here, include project memory. Dry run first. The device folder is backed up before every write. |
 | **Take over in Claude** | One click: import into the current account and open Claude Desktop. |
 | **Resume in terminal** | Opens a terminal in the working folder running `claude --resume <id>`. If the transcript is not on this PC yet, it is placed where the CLI looks for it first. |
@@ -50,10 +51,19 @@ your PC and the folder scan cannot see them. Three ways to get them into the ban
 1. **Teleport them locally with Claude Code.** In a terminal, `claude --teleport` (or
    `/teleport` inside Claude Code) pulls a cloud session into the local CLI. Its transcript
    lands in `~/.claude/projects/`, and the bank picks it up on the next auto bank.
-2. **Ask Claude for a bundle.** Any cloud session can read your other cloud sessions through
-   its session tools. Ask it to export them as a Context Bank bundle, then use *Add a bundle
-   .zip* or drop the file on the window. Each chat becomes a full transcript with every
-   message, tool call and result, resumable with `claude --resume <id>` after import.
+2. **Ask Claude for a bundle.** Open any cloud session on the account (a new one is fine) and
+   paste this prompt. It works on every account, because the tool lives in this public repo:
+
+   ```
+   Export every Claude Code cloud session on this account as a Context Bank bundle.
+   1. Run: git clone --depth 1 https://github.com/sxi9/claude-session-transfer /tmp/cst
+      (if context-bank/tools is missing, clone again with: -b context-bank)
+   2. Read /tmp/cst/context-bank/tools/CLOUD-EXPORT.md and follow it exactly.
+   3. Send me the finished zip file. Do not summarize the sessions.
+   ```
+
+   Then use *Add a bundle .zip* or drop the file on the window. Each session becomes a full
+   transcript with every message, tool call and result, plus its repository and branch.
 3. **Export from Claude Desktop** with the claude-session-transfer *Capture* page once the
    session has been opened locally.
 
@@ -90,6 +100,8 @@ non-alphanumeric character replaced by a dash.
   sessions/<cliSessionId>/meta.json          summary used by list and search
   sessions/<cliSessionId>/text.txt           plain text for full-text search
   memory/<cwd-slug>/...                      project memory snapshots
+  project/<cwd-slug>/...                     the project's CLAUDE.md and .claude/ files
+  config/global/...                          your ~/.claude setup; config/private/settings.json stays local
   config.json                                labels, auto-bank, folders added
   trash/                                     removed sessions, by date
 ```
@@ -109,6 +121,8 @@ lib/handoff.js       handoff prompt builder
 lib/exporters.js     Markdown and HTML export
 lib/secrets.js       secret scan
 lib/zip.js           zip writer and reader, no dependencies
+lib/ops.js           every operation, Electron-free, run in worker threads (lib/worker.js)
+tools/cloud_export.py  builds a bundle of all cloud sessions from inside a cloud session (tools/CLOUD-EXPORT.md)
 renderer/            the UI: index.html, style.css, app.js
 test/bank.test.js    end-to-end tests on a temporary store
 ```

@@ -123,6 +123,8 @@
       <label>If it already exists <select id="i-mode"><option value="merge">Merge (keep both, add new lines)</option><option value="overwrite">Overwrite</option><option value="keep">Keep existing, add only missing</option></select></label>
       <label class="chk"><input type="checkbox" id="i-newid"> give it a new sidebar id (a separate copy)</label>
       <label class="chk"><input type="checkbox" id="i-memory" checked> include project memory</label>
+      <label class="chk"><input type="checkbox" id="i-project" checked> include the project's Claude files (CLAUDE.md, .claude/), never overwriting</label>
+      <label class="chk"><input type="checkbox" id="i-config"> also restore my Claude setup (global CLAUDE.md, commands, skills, agents), never overwriting</label>
       <label class="chk"><input type="checkbox" id="i-backup" checked> back up the device folder first</label>
     </div>
     <div id="i-remap"></div>
