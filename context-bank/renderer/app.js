@@ -87,8 +87,8 @@ function renderRows() {
     if (snip) snip = esc(snip);
     if (snip) for (const w of words) snip = snip.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => `<mark>${m}</mark>`);
     d.innerHTML = `<input type="checkbox" ${S.sel.has(s.cliId) ? 'checked' : ''}>
-      <div><div class="t">${esc(s.title)}${s.banked ? '<span class="pill ok">banked</span>' : '<span class="pill warn">not banked</span>'}${s.chat ? '<span class="pill acc">claude.ai chat</span>' : s.live ? '' : '<span class="pill">bank only</span>'}${s.orphan || (s.live && s.live.orphan) ? '<span class="pill">no record</span>' : ''}${accLabel ? `<span class="pill acc">${esc(accLabel)}</span>` : ''}</div>
-      <div class="s">${esc(shortPath(s.cwd))}${s.model ? ' · ' + esc(s.model.replace(/^claude-/, '')) : ''}</div>${snip ? `<div class="snip">${snip}</div>` : ''}</div>
+      <div><div class="t">${esc(s.title)}${s.banked ? '<span class="pill ok">banked</span>' : '<span class="pill warn">not banked</span>'}${s.chat ? '<span class="pill acc">claude.ai chat</span>' : s.live ? '' : '<span class="pill">bank only</span>'}${s.orphan || (s.live && s.live.orphan) ? '<span class="pill">no record</span>' : ''}</div>
+      <div class="s">${esc(shortPath(s.cwd))}${s.model ? ' · ' + esc(s.model.replace(/^claude-/, '')) : ''}${accLabel ? ` · <span class="pill acc" style="margin-left:0">${esc(accLabel)}</span>` : ''}</div>${snip ? `<div class="snip">${snip}</div>` : ''}</div>
       <div class="r">${esc(fmtDate(s.lastActivityMs))}<br>${s.userTurns != null ? s.userTurns + ' turns · ' : ''}${s.sizeKB >= 0 ? s.sizeKB + ' KB' : ''}</div>`;
     frag.appendChild(d);
   }
@@ -122,6 +122,7 @@ async function openSession(cliId, quiet) {
   if (m.branch) bits.push(`branch ${esc(m.branch)}`);
   if (m.model) bits.push(esc(m.model));
   bits.push(`${m.userTurns ?? '?'} user turns · ${m.assistantTurns ?? '?'} replies · ${S.detail.lines} lines`);
+  if (S.detail.turnsTotal > S.detail.turns.length) bits.push(`<span style="color:var(--warn)">showing the last ${S.detail.turns.length} of ${S.detail.turnsTotal} turns</span>`);
   bits.push(`last ${esc(fmtDate(m.lastActivityMs))}`);
   bits.push(`<span title="${esc(cliId)}">id ${shortId(cliId)}</span>`);
   bits.push(m.banked ? `<span style="color:var(--ok)">in bank</span>` : `<span style="color:var(--warn)">not banked yet</span>`);
@@ -265,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#sel-all').onchange = () => { if ($('#sel-all').checked) S.shown.forEach(s => S.sel.add(s.cliId)); else S.sel.clear(); renderRows(); };
 
   $('#bank-all').onclick = async () => { $('#bank-all').disabled = true; status('Banking…'); try { const r = await window.bank.bankAll(); status(r.message); } catch (e) { status('Failed: ' + e.message); } $('#bank-all').disabled = false; refresh(); };
+  $('#bank-all').title = 'Copies every session into the bank. Runs in the background; the window stays usable.';
   $('#add-folder').onclick = async () => { const r = await window.bank.bankFolder(); if (r) { status(r.message); refresh(); } };
   $('#add-bundle').onclick = async () => { const r = await window.bank.bankBundle(); if (r) { status(r.message); refresh(); } };
   $('#open-bank').onclick = () => window.bank.openBank();
@@ -344,5 +346,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   await loadAll();
-  if (S.state.config.autoBank && !S.state.bankCount && S.sessions.length) { status('First run: banking everything on this PC…'); const r = await window.bank.bankAll(); status(r.message); refresh(); }
+  if (S.state.config.autoBank && !S.state.bankCount && S.sessions.length) { status('First run: banking everything on this PC in the background…'); $('#bank-all').disabled = true; const r = await window.bank.bankAll(); $('#bank-all').disabled = false; status(r.message); refresh(); }
 });

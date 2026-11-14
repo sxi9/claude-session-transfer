@@ -253,6 +253,7 @@ function discover() {
 
 // Transcripts under ~/.claude/projects that no sidebar record points at (deleted from the
 // sidebar, made by the CLI, or left over from another account). Still worth banking.
+const orphanCache = new Map(); // transcript path -> { size, mtimeMs, entry }
 function discoverOrphans(known = new Set(), projRoot = projectsRoot()) {
   const out = [];
   for (const slug of safeDirs(projRoot)) {
@@ -264,18 +265,22 @@ function discoverOrphans(known = new Set(), projRoot = projectsRoot()) {
       const transcript = path.join(dir, f);
       let st; try { st = fs.statSync(transcript); } catch { continue; }
       if (st.size === 0) continue;
+      const cached = orphanCache.get(transcript);
+      if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) { if (cached.entry) out.push(cached.entry); continue; }
       const head = fs.readFileSync(transcript);
       const s = summarize(head);
-      if (!s.userTurns && !s.assistantTurns) continue;
+      if (!s.userTurns && !s.assistantTurns) { orphanCache.set(transcript, { size: st.size, mtimeMs: st.mtimeMs, entry: null }); continue; }
       let title = s.title;
       const ct = readJson(path.join(dir, cliId, 'custom-title.json'));
       if (ct && ct.customTitle) title = ct.customTitle;
-      out.push({
+      const entry = ({
         kind: 'live', id: '', cliId, title: title || (s.firstUser ? s.firstUser.split(/\r?\n/)[0].slice(0, 80) : `Session ${cliId.slice(0, 8)}`),
         cwd: s.cwd, archived: false, lastActivityMs: msOf(s.lastTs), createdMs: msOf(s.firstTs), model: s.model,
         account: '', device: '', recordFile: null, transcript, extraDir: path.join(dir, cliId),
         hasTranscript: true, sizeKB: Math.floor(st.size / 1024), mtimeMs: st.mtimeMs, orphan: true,
       });
+      orphanCache.set(transcript, { size: st.size, mtimeMs: st.mtimeMs, entry });
+      out.push(entry);
     }
   }
   out.sort((a, b) => b.lastActivityMs - a.lastActivityMs);

@@ -153,14 +153,18 @@ function remove(cliId) {
 }
 
 // Bank everything Claude knows about on this PC: every account's records plus orphan transcripts.
-function bankLive({ includeMemory = true, onlyChanged = true } = {}) {
+function bankLive({ includeMemory = true, onlyChanged = true } = {}, onProgress = () => {}) {
   const { accounts, orphans } = C.discoverAll();
   const results = { added: 0, merged: 0, unchanged: 0, skipped: 0, items: [] };
   const seen = new Set();
+  const total = accounts.reduce((n, a) => n + a.sessions.length, 0) + orphans.length;
+  let i = 0;
   const consider = (s, origin) => {
+    i++;
     if (!s.cliId || seen.has(s.cliId) || !s.hasTranscript) { if (!s.hasTranscript) results.skipped++; return; }
     seen.add(s.cliId);
     if (onlyChanged) { const m = meta(s.cliId); if (m && m.bankedAt && s.mtimeMs && s.mtimeMs < m.bankedAt - 1000 && m.sizeKB === s.sizeKB) { results.unchanged++; return; } }
+    onProgress(`Banking ${i}/${total}: ${s.title} (${s.sizeKB} KB)`);
     const r = bankSession({ cliId: s.cliId, transcript: s.transcript, extraDir: s.extraDir, record: s.recordFile ? C.readJson(s.recordFile) : null,
       account: s.account, device: s.device, origin, memoryDir: path.join(path.dirname(s.transcript), 'memory') }, { includeMemory });
     results[r.status === 'skip' ? 'skipped' : r.status]++;
@@ -173,10 +177,12 @@ function bankLive({ includeMemory = true, onlyChanged = true } = {}) {
 }
 
 // Bank every session found in any folder (a copied .claude folder, a projects folder, a USB stick…).
-function bankFolder(folder, { includeMemory = true } = {}) {
+function bankFolder(folder, { includeMemory = true } = {}, onProgress = () => {}) {
   const scan = C.scanFolder(folder);
   const results = { added: 0, merged: 0, unchanged: 0, skipped: 0, items: [], scanned: scan.sources.length, projectRoots: scan.projectRoots };
+  let i = 0;
   for (const src of scan.sources) {
+    onProgress(`Banking ${++i}/${scan.sources.length} from ${path.basename(folder)}`);
     const r = bankSession({ ...src, origin: `folder:${folder}` }, { includeMemory });
     results[r.status === 'skip' ? 'skipped' : r.status]++;
     if (r.status === 'added' || r.status === 'merged') results.items.push(r);
@@ -187,13 +193,15 @@ function bankFolder(folder, { includeMemory = true } = {}) {
 }
 
 // Bank a bundle zip made by claude-session-transfer (or by this app).
-function bankBundle(zipPath) {
+function bankBundle(zipPath, onProgress = () => {}) {
   const z = ZipReader.fromFile(zipPath);
   const manifest = JSON.parse(z.read('manifest.json').toString('utf8'));
   const results = { added: 0, merged: 0, unchanged: 0, skipped: 0, items: [], scanned: (manifest.sessions || []).length };
   const names = z.names();
+  let i = 0;
   for (const e of manifest.sessions || []) {
     const cid = e.cliSessionId; const base = `sessions/${cid}/`;
+    onProgress(`Bundle ${++i}/${manifest.sessions.length}: ${e.title || cid}`);
     if (!z.has(base + 'transcript.jsonl')) { results.skipped++; continue; }
     const record = z.has(base + 'record.json') ? JSON.parse(z.read(base + 'record.json').toString('utf8')) : null;
     const extra = names.filter(n => n.startsWith(base + 'extra/') && !n.endsWith('/')).map(n => ({ rel: n.slice((base + 'extra/').length), buf: z.read(n) }));
@@ -210,10 +218,12 @@ function bankBundle(zipPath) {
 }
 
 // Bank claude.ai chats (from a data export file or a live pull) as sessions.
-function bankChats(list, { cwd, origin = 'claude.ai' } = {}) {
+function bankChats(list, { cwd, origin = 'claude.ai' } = {}, onProgress = () => {}) {
   cwd = cwd || loadConfig().chatsCwd || chats.defaultCwd();
   const results = { added: 0, merged: 0, unchanged: 0, skipped: 0, items: [], scanned: list.length };
+  let i = 0;
   for (const chat of list) {
+    onProgress(`Chat ${++i}/${list.length}: ${chat.name}`);
     if (!chat.messages.length) { results.skipped++; continue; }
     const old = meta(chat.uuid);
     const r = bankSession({ cliId: chat.uuid, transcriptBuf: chats.toTranscript(chat, (old && old.cwd) || cwd), record: old ? null : chats.toRecord(chat, cwd), origin, title: chat.name,
@@ -256,16 +266,18 @@ function exportBundle(cliIds, outPath, { includeMemory = true } = {}) {
 }
 
 // Install banked sessions into an account on this PC so Claude Desktop lists them and can resume.
-function importToAccount(cliIds, { accountId, deviceId, cwdMap = {}, newId = false, overwrite = false, merge = true, dryRun = false, includeMemory = true, backup = true }) {
+function importToAccount(cliIds, { accountId, deviceId, cwdMap = {}, newId = false, overwrite = false, merge = true, dryRun = false, includeMemory = true, backup = true }, onProgress = () => {}) {
   const log = [];
   const destDir = path.join(C.sessionsRoot(), accountId, deviceId);
   if (!dryRun && backup) { const b = C.backupFolder(destDir); if (b) log.push(`Backup of ${accountId.slice(0, 8)}…/${deviceId.slice(0, 8)}… -> ${b}`); }
   if (!dryRun) fs.mkdirSync(destDir, { recursive: true });
   const installed = [];
   const slugs = new Set();
+  let i = 0;
   for (const cid of cliIds) {
     const m = meta(cid);
     if (!m) { log.push(`SKIP ${cid}: not in bank`); continue; }
+    onProgress(`${dryRun ? 'Checking' : 'Importing'} ${++i}/${cliIds.length}: ${m.title}`);
     const r = C.installSession({ cliId: cid, record: record(cid), transcriptBuf: transcript(cid), extraFiles: extraFiles(cid) },
       { accountId, deviceId, cwdMap, newId, overwrite, merge, dryRun });
     log.push(...r.log);
