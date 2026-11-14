@@ -7,6 +7,9 @@ on:
       - "context-bank/**"
       - ".github/workflows/context-bank-windows.yml"
 
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -20,12 +23,25 @@ jobs:
           node-version: 22
       - run: npm ci --no-audit --no-fund
       - run: npm test
-      - name: Portable single exe + zip
+      - name: Portable single exe
         run: npm run dist:win
+      - name: Zip the unpacked app
+        shell: pwsh
+        run: Compress-Archive -Path "dist/Context Bank-win32-x64" -DestinationPath "dist/ContextBank-win64.zip" -Force
       - uses: actions/upload-artifact@v4
         with:
           name: ContextBank-windows
           path: |
-            context-bank/dist/builder/*.exe
+            context-bank/dist/builder/ContextBank-portable.exe
             context-bank/dist/ContextBank-win64.zip
           if-no-files-found: error
+      - name: Publish release with the exe
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "context-bank-build-${{ github.run_number }}"
+          gh release create $tag "dist/builder/ContextBank-portable.exe" "dist/ContextBank-win64.zip" `
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" --latest `
+            --title "Context Bank Windows build ${{ github.run_number }}" `
+            --notes "Built from ${{ github.sha }} on branch ${{ github.ref_name }}. ContextBank-portable.exe is a single file; the zip holds the unpacked app. Unsigned: SmartScreen shows More info > Run anyway once."

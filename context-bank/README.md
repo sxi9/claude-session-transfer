@@ -20,9 +20,10 @@ node test/ui-smoke.js   # renders the UI in headless Chromium (needs playwright)
 
 ![Context Bank](docs/screenshot-dark.png)
 
-Prebuilt Windows binaries come out of the **Context Bank Windows build** GitHub Actions
-workflow (Actions tab, download the `ContextBank-windows` artifact). The exe is unsigned, so
-SmartScreen shows "More info" > "Run anyway" the first time.
+**Download the exe:** every build is published under
+[Releases](https://github.com/sxi9/claude-session-transfer/releases) as `ContextBank-portable.exe`
+(single file) and `ContextBank-win64.zip` (unpacked app), by the *Context Bank Windows build*
+workflow. The exe is unsigned, so SmartScreen shows "More info" > "Run anyway" the first time.
 
 ## What it does
 

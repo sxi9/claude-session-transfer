@@ -8,7 +8,7 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "pack:win": "electron-packager . \"Context Bank\" --platform=win32 --arch=x64 --out dist --asar --overwrite --ignore=\"^/(dist|docs|test|\\.gitignore)\"",
-    "dist:win": "npm run pack:win && electron-builder --win portable --x64 && node -e \"const z=require('child_process');process.platform==='win32'?z.execSync('powershell Compress-Archive -Force \\\"dist/Context Bank-win32-x64\\\" dist/ContextBank-win64.zip'):z.execSync('cd dist && zip -qr ContextBank-win64.zip \\\"Context Bank-win32-x64\\\"')\""
+    "dist:win": "npm run pack:win && electron-builder --win portable --x64"
   },
   "devDependencies": {
     "@electron/packager": "^18.3.6",
