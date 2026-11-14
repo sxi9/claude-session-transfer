@@ -1,0 +1,41 @@
+{
+  "name": "context-bank",
+  "version": "0.1.0",
+  "description": "Context Bank: a borderless local window that banks every Claude Code session on this PC, searches them, and imports them into any Claude account so Claude can pick up where it left off.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "pack:win": "electron-packager . \"Context Bank\" --platform=win32 --arch=x64 --out dist --asar --overwrite --ignore=\"^/(dist|docs|test|\\.gitignore)\"",
+    "dist:win": "npm run pack:win && electron-builder --win portable --x64 && node -e \"const z=require('child_process');process.platform==='win32'?z.execSync('powershell Compress-Archive -Force \\\"dist/Context Bank-win32-x64\\\" dist/ContextBank-win64.zip'):z.execSync('cd dist && zip -qr ContextBank-win64.zip \\\"Context Bank-win32-x64\\\"')\""
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.contextbank.app",
+    "productName": "Context Bank",
+    "directories": {
+      "output": "dist/builder"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "renderer/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "ContextBank-portable.exe"
+    }
+  }
+}

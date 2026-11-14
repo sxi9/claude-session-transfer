@@ -10,6 +10,15 @@ python cst.py gui          # tkinter window (fewer options)
 python cst.py --help       # command line
 ```
 
+## Context Bank (desktop app)
+
+`context-bank/` holds a borderless Electron window built on the same on-disk layout: it banks
+every session on the PC (all accounts, orphan transcripts, dropped `.claude` folders, bundles)
+and the claude.ai Recents chats into `~/.context-bank`, searches the full text of all of them,
+shows each conversation, and imports any session into any account so Claude continues from
+where it stopped. See [context-bank/README.md](context-bank/README.md). Windows builds come
+from the *Context Bank Windows build* GitHub Actions workflow.
+
 ## What it does
 
 | Area | Options |
@@ -166,6 +175,7 @@ cst/web.py                 local HTTP server and JSON API
 cst/static/index.html      the web UI, single file, dark mode by system preference
 cst/static/capture.html    browser-side capture page: reads a .claude folder, builds the zip in the browser
 claude_session_transfer.py tkinter window, thin wrapper over cst/core.py
+context-bank/              Electron desktop app: local session bank, search, chat viewer, account import
 ```
 
 ## Caveats

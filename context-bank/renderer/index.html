@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Context Bank</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="frame">
+  <header id="titlebar">
+    <div class="brand"><span class="dot"></span>Context Bank</div>
+    <div class="search nodrag">
+      <input id="q" type="search" placeholder="Search every session… (Ctrl+F)" autocomplete="off" spellcheck="false">
+      <label class="chk" title="Also search inside every message, not only titles and folders"><input type="checkbox" id="deep" checked> in messages</label>
+    </div>
+    <div class="winbtns nodrag">
+      <button id="w-min" title="Minimize">&#x2013;</button>
+      <button id="w-max" title="Maximize">&#x25A1;</button>
+      <button id="w-close" class="close" title="Close">&#x2715;</button>
+    </div>
+  </header>
+
+  <aside id="rail">
+    <div class="section">Sources</div>
+    <button class="nav active" data-scope="all">Everything <span class="n" id="n-all">0</span></button>
+    <button class="nav" data-scope="bank">In the bank <span class="n" id="n-bank">0</span></button>
+    <button class="nav" data-scope="unbanked">On this PC, not banked <span class="n" id="n-unbanked">0</span></button>
+    <button class="nav" data-scope="chats">claude.ai chats <span class="n" id="n-chats">0</span></button>
+    <div class="section">Accounts on this PC</div>
+    <div id="accounts"></div>
+    <div class="section">Add to the bank</div>
+    <button class="act primary" id="bank-all">Bank everything on this PC</button>
+    <button class="act" id="add-folder">Add a .claude folder…</button>
+    <button class="act" id="add-bundle">Add a bundle .zip…</button>
+    <div class="hint">or drop folders, bundles or .jsonl files anywhere on this window</div>
+    <div class="section">claude.ai chats (Recents)</div>
+    <button class="act" id="chats-sync">Sync Recents from claude.ai</button>
+    <button class="act" id="chats-export">Import a data export…</button>
+    <div class="hint">Sync needs your claude.ai session key (Settings). The export comes from claude.ai Settings › Privacy › Export data.</div>
+    <div class="grow"></div>
+    <button class="act" id="open-bank">Open bank folder</button>
+    <button class="act" id="settings">Settings &amp; backups</button>
+    <div class="hint" id="bankpath"></div>
+  </aside>
+
+  <main id="list">
+    <div class="toolbar">
+      <label class="chk"><input type="checkbox" id="sel-all"> <span id="count">0 sessions</span></label>
+      <select id="sort">
+        <option value="recent">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="title">Title</option>
+        <option value="size">Largest</option>
+        <option value="turns">Most turns</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="show-archived"> archived</label>
+      <div class="grow"></div>
+      <div id="bulk" class="bulk hidden">
+        <span id="selcount"></span>
+        <button id="b-bank">Bank</button>
+        <button id="b-import" class="primary">Import to account…</button>
+        <button id="b-bundle">Export bundle</button>
+        <button id="b-remove" class="danger">Remove from bank</button>
+      </div>
+    </div>
+    <div id="rows" tabindex="0"></div>
+    <div id="empty" class="empty hidden">
+      <b>Nothing here yet.</b>
+      <p>Press <i>Bank everything on this PC</i> to copy every session Claude Desktop and Claude Code know about into your local bank, or drop a <code>.claude</code> folder from another machine onto this window.</p>
+    </div>
+  </main>
+
+  <section id="detail">
+    <div id="detail-empty" class="empty"><b>Pick a session</b><p>Read the whole conversation, import it into any account on this PC, resume it in a terminal, or copy a handoff prompt so Claude continues from where it stopped.</p></div>
+    <div id="detail-body" class="hidden">
+      <div class="dhead">
+        <div class="dtitle" id="d-title"></div>
+        <div class="dmeta" id="d-meta"></div>
+        <div class="dactions">
+          <button class="primary" id="d-takeover" title="Import into the current account, then open Claude Desktop">Take over in Claude</button>
+          <button id="d-import">Import to account…</button>
+          <button id="d-resume" title="Opens a terminal running claude --resume in the working folder">Resume in terminal</button>
+          <button id="d-handoff" title="Copies a prompt holding the facts and the last turns, for a new chat anywhere">Copy handoff prompt</button>
+          <button id="d-open-chat" class="hidden">Open on claude.ai</button>
+          <div class="menu">
+            <button id="d-export">Export ▾</button>
+            <div class="menu-items">
+              <button data-fmt="md">Markdown</button>
+              <button data-fmt="html">HTML</button>
+              <button data-fmt="jsonl">Raw transcript (.jsonl)</button>
+              <button data-fmt="bundle">Bundle .zip</button>
+            </div>
+          </div>
+          <button id="d-bank">Bank now</button>
+          <button id="d-secrets">Scan for secrets</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="chat">Chat</button>
+        <button class="tab" data-tab="files">Files touched</button>
+        <button class="tab" data-tab="info">Details</button>
+        <label class="chk right"><input type="checkbox" id="show-tools" checked> tool calls</label>
+        <label class="chk"><input type="checkbox" id="show-thinking"> thinking</label>
+      </div>
+      <div id="tab-chat" class="tabpane"></div>
+      <div id="tab-files" class="tabpane hidden"></div>
+      <div id="tab-info" class="tabpane hidden"></div>
+    </div>
+  </section>
+
+  <footer id="status"><span id="status-text">Ready</span><span class="grow"></span><span id="status-claude"></span></footer>
+</div>
+
+<!-- import dialog -->
+<div class="modal hidden" id="m-import">
+  <div class="box">
+    <h2>Import into an account on this PC</h2>
+    <p class="muted" id="i-what"></p>
+    <div class="grid">
+      <label>Account <select id="i-account"></select></label>
+      <label>Device <select id="i-device"></select></label>
+      <label>If it already exists <select id="i-mode"><option value="merge">Merge (keep both, add new lines)</option><option value="overwrite">Overwrite</option><option value="keep">Keep existing, add only missing</option></select></label>
+      <label class="chk"><input type="checkbox" id="i-newid"> give it a new sidebar id (a separate copy)</label>
+      <label class="chk"><input type="checkbox" id="i-memory" checked> include project memory</label>
+      <label class="chk"><input type="checkbox" id="i-backup" checked> back up the device folder first</label>
+    </div>
+    <div id="i-remap"></div>
+    <pre id="i-log" class="log hidden"></pre>
+    <div class="buttons">
+      <button id="i-dry">Dry run</button>
+      <span class="grow"></span>
+      <button id="i-cancel">Cancel</button>
+      <button class="primary" id="i-go">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- settings dialog -->
+<div class="modal hidden" id="m-settings">
+  <div class="box">
+    <h2>Settings</h2>
+    <div class="grid">
+      <label class="chk"><input type="checkbox" id="s-auto"> bank changed sessions automatically every <input type="number" id="s-min" min="1" max="1440" style="width:60px"> minutes</label>
+      <label class="chk"><input type="checkbox" id="s-memory"> also bank project memory</label>
+    </div>
+    <h3>claude.ai chats</h3>
+    <div class="grid">
+      <label>Session key <input type="password" id="s-key" placeholder="sessionKey cookie value (sk-ant-sid01-…)" style="flex:1"></label>
+      <div class="muted small">From a signed-in claude.ai tab: DevTools › Application › Cookies › claude.ai › <code>sessionKey</code>. Stored only in the bank's config.json on this PC. Leave empty to use the data export instead.</div>
+      <label>Folder chats run in when resumed <input type="text" id="s-chatcwd" placeholder="defaults to your home folder"><button id="s-chatcwd-pick">Pick…</button></label>
+      <label class="chk"><input type="checkbox" id="s-syncall"> next sync refetches every chat, not only ones changed since the last sync</label>
+    </div>
+    <h3>Account labels</h3>
+    <div id="s-labels"></div>
+    <h3>Folders added</h3>
+    <div id="s-sources" class="muted small"></div>
+    <h3>Backups of Claude's session lists</h3>
+    <div id="s-backups" class="small"></div>
+    <h3>Paths</h3>
+    <div id="s-paths" class="muted small"></div>
+    <div class="buttons"><span class="grow"></span><button id="s-close">Close</button><button class="primary" id="s-save">Save</button></div>
+  </div>
+</div>
+
+<!-- text dialog (handoff, secrets, logs) -->
+<div class="modal hidden" id="m-text">
+  <div class="box wide">
+    <h2 id="t-title"></h2>
+    <pre id="t-body" class="log"></pre>
+    <div class="buttons"><button id="t-copy">Copy</button><span class="grow"></span><button id="t-close">Close</button></div>
+  </div>
+</div>
+
+<div id="dropzone" class="hidden">Drop to add to the bank</div>
+<script src="app.js"></script>
+</body>
+</html>
