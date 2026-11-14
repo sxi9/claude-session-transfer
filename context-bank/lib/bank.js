@@ -82,7 +82,8 @@ function bankSession(source, { includeMemory = true } = {}) {
     files: s.files.slice(0, 200), tools: s.tools, sizeKB: Math.floor(full.length / 1024), sha: sha(full),
     archived: !!record.isArchived, origins: [...origins], account: source.account || (old && old.account) || '',
     bankedAt: Date.now(), firstBankedAt: (old && old.firstBankedAt) || Date.now(), extraFiles: extra.length,
-    record: { sessionId: record.sessionId, title: record.title, cwd: record.cwd, model: record.model, lastActivityAt: record.lastActivityAt, createdAt: record.createdAt, isArchived: record.isArchived },
+    record: { sessionId: record.sessionId, title: record.title, cwd: record.cwd, model: record.model, lastActivityAt: record.lastActivityAt, createdAt: record.createdAt, isArchived: record.isArchived, cloudSessionId: record.cloudSessionId, cloudUrl: record.cloudUrl },
+    cloudUrl: record.cloudUrl || (old && old.cloudUrl) || '',
   };
   C.writeFile(metaPath, JSON.stringify(meta));
   if (status !== 'unchanged' || !fs.existsSync(path.join(dir, 'text.txt'))) {

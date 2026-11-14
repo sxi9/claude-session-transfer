@@ -87,7 +87,7 @@ function renderRows() {
     if (snip) snip = esc(snip);
     if (snip) for (const w of words) snip = snip.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => `<mark>${m}</mark>`);
     d.innerHTML = `<input type="checkbox" ${S.sel.has(s.cliId) ? 'checked' : ''}>
-      <div><div class="t">${esc(s.title)}${s.banked ? '<span class="pill ok">banked</span>' : '<span class="pill warn">not banked</span>'}${s.chat ? '<span class="pill acc">claude.ai chat</span>' : s.live ? '' : '<span class="pill">bank only</span>'}${s.orphan || (s.live && s.live.orphan) ? '<span class="pill">no record</span>' : ''}</div>
+      <div><div class="t">${esc(s.title)}${s.banked ? '<span class="pill ok">banked</span>' : '<span class="pill warn">not banked</span>'}${s.chat ? '<span class="pill acc">claude.ai chat</span>' : s.cloudUrl ? '<span class="pill acc">cloud session</span>' : s.live ? '' : '<span class="pill">bank only</span>'}${s.orphan || (s.live && s.live.orphan) ? '<span class="pill">no record</span>' : ''}</div>
       <div class="s">${esc(shortPath(s.cwd))}${s.model ? ' · ' + esc(s.model.replace(/^claude-/, '')) : ''}${accLabel ? ` · <span class="pill acc" style="margin-left:0">${esc(accLabel)}</span>` : ''}</div>${snip ? `<div class="snip">${snip}</div>` : ''}</div>
       <div class="r">${esc(fmtDate(s.lastActivityMs))}<br>${s.userTurns != null ? s.userTurns + ' turns · ' : ''}${s.sizeKB >= 0 ? s.sizeKB + ' KB' : ''}</div>`;
     frag.appendChild(d);
@@ -129,7 +129,8 @@ async function openSession(cliId, quiet) {
   if (m.origins && m.origins.length) bits.push(`from ${esc(m.origins.join(', '))}`);
   $('#d-meta').innerHTML = bits.join('<span class="muted"> · </span>');
   $('#d-bank').textContent = m.banked ? 'Re-bank now' : 'Bank now';
-  $('#d-open-chat').classList.toggle('hidden', !m.chatUrl);
+  $('#d-open-chat').classList.toggle('hidden', !(m.chatUrl || m.cloudUrl));
+  $('#d-open-chat').textContent = m.chatUrl ? 'Open on claude.ai' : 'Open cloud session';
   $('#d-bank').classList.toggle('hidden', !!m.chat);
   $('#d-takeover').disabled = !S.state.currentAccount;
   $('#d-takeover').title = S.state.currentAccount ? 'Import into the current account, then open Claude Desktop' : 'No current account found in Claude Desktop config';
@@ -138,7 +139,7 @@ async function openSession(cliId, quiet) {
   $('#tab-files').innerHTML = files.length ? `<div class="filelist">${files.map(f => `<div>${esc(f)}</div>`).join('')}</div>` : '<div class="muted">No file paths were touched by tools in this session.</div>';
   const kv = [['Session id', cliId], ['Sidebar id', (m.record && m.record.sessionId) || m.id || ''], ['Working folder', m.cwd], ['Folder exists here', m.cwdExists ? 'yes' : 'no'], ['Model', m.model], ['Git branch', m.branch],
     ['Claude Code version', m.version], ['Created', fmtDate(m.createdMs)], ['Last activity', fmtDate(m.lastActivityMs)], ['Tools used', (m.tools || []).join(', ')], ['Transcript size', (m.sizeKB ?? '') + ' KB'],
-    ['Banked at', fmtDate(m.bankedAt)], ['First banked', fmtDate(m.firstBankedAt)], ['Origins', (m.origins || []).join('\n')], ['Live transcript', m.live ? m.live.transcript : (m.transcript || '')], ['Account', m.account]];
+    ['Banked at', fmtDate(m.bankedAt)], ['First banked', fmtDate(m.firstBankedAt)], ['Origins', (m.origins || []).join('\n')], ['Live transcript', m.live ? m.live.transcript : (m.transcript || '')], ['Account', m.account], ['Cloud session', m.cloudUrl]];
   $('#tab-info').innerHTML = `<dl class="kv">${kv.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
 }
 
@@ -288,7 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const msg = await window.bank.openClaude(); status(msg); refresh();
   };
   $('#d-import').onclick = () => openImport([S.active]);
-  $('#d-open-chat').onclick = () => window.bank.openUrl(S.detail.meta.chatUrl);
+  $('#d-open-chat').onclick = () => window.bank.openUrl(S.detail.meta.chatUrl || S.detail.meta.cloudUrl);
   $('#chats-export').onclick = async () => { const r = await window.bank.chatsExport(); if (r) { status(r.message); refresh(); } };
   $('#chats-sync').onclick = async () => {
     const cfg = await window.bank.config();

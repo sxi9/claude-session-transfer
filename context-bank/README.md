@@ -42,6 +42,24 @@ workflow. The exe is unsigned, so SmartScreen shows "More info" > "Run anyway" t
 | **Export** | Markdown, HTML, raw `.jsonl`, or a bundle `.zip` of selected sessions for another PC or account. Secret scan before sharing. |
 | **Backups** | Every import backs up the target device folder first. List and restore from Settings. |
 
+## Cloud sessions (the cloud icon in Recents)
+
+Sessions started on claude.ai/code run in Anthropic's cloud, so their transcripts are not on
+your PC and the folder scan cannot see them. Three ways to get them into the bank:
+
+1. **Teleport them locally with Claude Code.** In a terminal, `claude --teleport` (or
+   `/teleport` inside Claude Code) pulls a cloud session into the local CLI. Its transcript
+   lands in `~/.claude/projects/`, and the bank picks it up on the next auto bank.
+2. **Ask Claude for a bundle.** Any cloud session can read your other cloud sessions through
+   its session tools. Ask it to export them as a Context Bank bundle, then use *Add a bundle
+   .zip* or drop the file on the window. Each chat becomes a full transcript with every
+   message, tool call and result, resumable with `claude --resume <id>` after import.
+3. **Export from Claude Desktop** with the claude-session-transfer *Capture* page once the
+   session has been opened locally.
+
+A banked cloud session keeps the original `cloudSessionId` and a `cloudUrl` in its record, so
+the Details tab links back to the claude.ai/code page.
+
 ## How "take over" works
 
 Claude Desktop (Code tab) stores a sidebar record per session under its AppData folder and the
