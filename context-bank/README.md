@@ -95,6 +95,19 @@ renderer/            the UI: index.html, style.css, app.js
 test/bank.test.js    end-to-end tests on a temporary store
 ```
 
+## If the exe does not open
+
+The portable exe unpacks itself to a temp folder on every start, so the first launch can take
+10 to 20 seconds with nothing on screen. If still nothing appears:
+
+1. Check Task Manager for *Context Bank*. If it is there, the window is off screen or hidden:
+   end it and start again.
+2. Open a command prompt and run the exe from there; errors print to that window.
+3. Look at `%APPDATA%\context-bank\startup.log`. Every start writes a line there, and a
+   startup error also pops up a dialog.
+4. Antivirus or SmartScreen may have quarantined it silently. The zip build, unpacked and run
+   as `Context Bank.exe`, avoids the self-extracting step.
+
 ## Caveats
 
 - The live chat sync calls the same undocumented endpoints the claude.ai web app uses, with

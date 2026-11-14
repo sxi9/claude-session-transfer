@@ -3,7 +3,7 @@
 @media(prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--panel2:#1b1f28;--line:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#4f8cff;
   --danger:#f87171;--ok:#4ade80;--warn:#fbbf24;--hover:#1e232d;--sel:#1f2d4d;--code:#11141a;--user:#1d2a44;--shadow:0 10px 40px rgba(0,0,0,.6)}}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:transparent;color:var(--text);font:13.5px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:13.5px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
 button,input,select{font:inherit;color:inherit}
 button{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;white-space:nowrap}
 button:hover{background:var(--hover)}button:disabled{opacity:.5;cursor:not-allowed}
@@ -17,8 +17,7 @@ code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:12px}
 pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Consolas,Menlo,monospace}
 
 #frame{height:100vh;display:grid;grid-template-columns:240px minmax(320px,1fr) minmax(420px,1.3fr);grid-template-rows:44px 1fr 26px;
-  grid-template-areas:"title title title" "rail list detail" "status status status";background:var(--bg);border-radius:var(--radius);overflow:hidden;
-  border:1px solid var(--line);box-shadow:var(--shadow)}
+  grid-template-areas:"title title title" "rail list detail" "status status status";background:var(--bg);overflow:hidden;border:1px solid var(--line)}
 #titlebar{grid-area:title;display:flex;align-items:center;gap:16px;padding:0 0 0 14px;background:var(--panel);border-bottom:1px solid var(--line);-webkit-app-region:drag;user-select:none}
 .nodrag{-webkit-app-region:no-drag}
 .brand{font-weight:650;display:flex;align-items:center;gap:8px}.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}

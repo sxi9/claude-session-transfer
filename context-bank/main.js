@@ -14,17 +14,41 @@ const chats = require('./lib/chats');
 let win = null;
 let autoTimer = null;
 
+// Startup diagnostics: anything that goes wrong before the window shows is written to
+// <userData>/startup.log and shown in a dialog, instead of the app silently doing nothing.
+function logLine(msg) {
+  try { fs.mkdirSync(app.getPath('userData'), { recursive: true }); fs.appendFileSync(path.join(app.getPath('userData'), 'startup.log'), `${new Date().toISOString()} ${msg}\n`); } catch {}
+}
+process.on('uncaughtException', (e) => {
+  logLine('uncaughtException ' + (e && e.stack || e));
+  try { dialog.showErrorBox('Context Bank could not start', String(e && e.stack || e) + '\n\nLog: ' + path.join(app.getPath('userData'), 'startup.log')); } catch {}
+});
+// The UI is plain HTML; GPU compositing only adds ways for a frameless window to come up blank.
+app.disableHardwareAcceleration();
+if (!app.requestSingleInstanceLock()) app.quit();
+else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+
 function createWindow() {
+  const dark = nativeTheme.shouldUseDarkColors;
+  // Transparency is only used on macOS. On Windows a transparent frameless window can stay
+  // invisible and never report ready-to-show, which looks like the app not opening at all.
+  const transparent = process.platform === 'darwin';
   win = new BrowserWindow({
     width: 1380, height: 860, minWidth: 900, minHeight: 560,
-    frame: false, transparent: process.platform !== 'linux', hasShadow: true,
+    frame: false, transparent, hasShadow: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    backgroundColor: process.platform === 'linux' ? (nativeTheme.shouldUseDarkColors ? '#0f1115' : '#f6f7f9') : '#00000000',
-    show: false,
+    backgroundColor: transparent ? '#00000000' : (dark ? '#0f1115' : '#f6f7f9'),
+    show: true, autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false },
   });
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.setMenuBarVisibility(false);
+  logLine(`window created platform=${process.platform} electron=${process.versions.electron} transparent=${transparent}`);
+  win.webContents.on('did-fail-load', (_e, code, desc) => logLine(`did-fail-load ${code} ${desc}`));
+  win.webContents.on('render-process-gone', (_e, d) => logLine('render-process-gone ' + JSON.stringify(d)));
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html')).catch(e => logLine('loadFile failed ' + e));
+  setTimeout(() => { if (win && !win.isDestroyed() && !win.isVisible()) { logLine('window still hidden after 3s, forcing show'); win.show(); } }, 3000);
   win.once('ready-to-show', () => {
+    logLine('ready-to-show');
     win.show();
     if (process.env.CONTEXT_BANK_SHOT) setTimeout(async () => {
       // dev aid: open the first session (and run a search if CONTEXT_BANK_SHOT_QUERY is set), capture, quit
